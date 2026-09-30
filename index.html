@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HalftoneCuttable</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #404040; --panel: #303030; --line: #ababff; --text: #e6e7ea;
+    --dim: #ffffff; --accent: #ababff; --warn: #e39820; --bad: #e06c75;
+    --pad: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    padding: 8px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px; flex: 0 0 auto;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .01em; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  aside {
+    width: 340px; flex: 0 0 340px; border-right: 1px solid var(--line);
+    overflow-y: auto; padding: var(--pad); background: var(--panel);
+  }
+  details {
+    border: 1px solid var(--line); border-radius: 6px;
+    margin: 0 0 12px; overflow: hidden;
+  }
+  details > summary {
+    color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary:hover { background: #ffffff10; }
+  details > summary::after { content: '▸'; margin-left: auto; transition: transform .15s; }
+  details[open] > summary::after { transform: rotate(90deg); }
+  details > .body { padding: 0 10px 10px; }
+
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .row label { flex: 0 0 110px; color: var(--dim); }
+  .row input[type=range] { flex: 1 1 auto; min-width: 0; }
+  .row .val { flex: 0 0 62px; text-align: right; font-variant-numeric: tabular-nums; }
+  .row .unit { color: var(--dim); font-size: 12px; }
+  .row[hidden], .group[hidden] { display: none; }
+  input[type=number], select {
+    background: #12131a; color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; padding: 3px 6px; font: inherit; width: 100%;
+  }
+  input[type=number] { width: 80px; }
+  input[type=color] {
+    width: 44px; height: 26px; padding: 0 2px; border: 1px solid var(--line);
+    border-radius: 4px; background: #12131a; cursor: pointer;
+  }
+  button {
+    background: #262933; color: var(--text); border: 1px solid var(--line);
+    border-radius: 5px; padding: 6px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: #30343f; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: #10131a; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.mini { padding: 2px 7px; font-size: 12px; }
+  .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  #drop {
+    border: 1px dashed var(--line); border-radius: 6px; padding: 14px;
+    text-align: center; color: var(--dim); cursor: pointer;
+  }
+  #drop.over { border-color: var(--accent); color: var(--accent); }
+  .samples { display: flex; gap: 6px; margin-top: 8px; }
+  .samples button { flex: 1 1 0; padding: 4px; font-size: 12px; }
+
+  /* One row per sheet, top of the stack first -- the order they are stacked in. */
+  .sheet { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+  .sheet .name { flex: 0 0 110px; color: var(--dim); }
+  .sheet .hex { flex: 1 1 auto; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 12px; }
+
+  /* Style filters: one card per filter, in chain order. */
+  .fcard { border: 1px solid #ffffff22; border-radius: 5px; padding: 4px 8px; margin: 6px 0; }
+  .fcard.on { border-color: var(--line); }
+  .fcard .fhead { display: flex; align-items: center; gap: 6px; }
+  .fcard .fhead label.check { flex: 1 1 auto; margin: 2px 0; color: var(--text); }
+  .fcard .fbody[hidden] { display: none; }
+
+  section.preview {
+    flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  }
+  .viewbar {
+    display: flex; gap: 6px; align-items: center;
+    padding: 6px 10px; border-bottom: 1px solid var(--line); flex: 0 0 auto;
+  }
+  .viewbar .spacer { flex: 1 1 auto; }
+  .viewbar select { width: auto; }
+  .viewbar select[hidden] { display: none; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 4px 10px; }
+  .seg button[aria-pressed=true] { background: var(--accent); color: #10131a; font-weight: 600; }
+  .seg button[hidden] { display: none; }
+  label.check { color: var(--dim); display: flex; align-items: center; gap: 5px; cursor: pointer; margin: 6px 0; }
+  label.check[hidden] { display: none; }
+
+  .stage {
+    flex: 1 1 auto; min-height: 0; display: grid; place-items: center;
+    padding: 14px; overflow: auto; background:
+      repeating-conic-gradient(#191b21 0% 25%, #1d1f26 0% 50%) 50% / 16px 16px;
+  }
+  .canvaswrap { position: relative; box-shadow: 0 2px 18px #0008; background: #fff; }
+  .canvaswrap canvas { display: block; }
+
+  footer {
+    flex: 0 0 auto; border-top: 1px solid var(--line); padding: 6px 12px;
+    display: flex; gap: 18px; align-items: center; color: var(--dim);
+    font-variant-numeric: tabular-nums; font-size: 12px; flex-wrap: wrap;
+  }
+  footer b { color: var(--text); font-weight: 600; }
+  #status { margin-left: auto; }
+  .warn { color: var(--warn); }
+  footer b.warn { color: var(--warn); }
+  .bad { color: var(--bad); }
+  footer b.bad { color: var(--bad); }
+  .note { color: var(--dim); font-size: 11px; margin: 6px 0 0; }
+  footer .note { margin: 0; }
+
+  @media (max-width: 760px) {
+    html, body { height: auto; }
+    body { overflow: auto; }
+    main { flex-direction: column; }
+    section.preview { order: 0; }
+    aside { order: 1; }
+    aside {
+      width: auto; flex: 0 0 auto;
+      border-right: 0; border-top: 1px solid var(--line);
+      overflow-y: visible;
+    }
+    .stage { height: 60vh; min-height: 240px; }
+    .viewbar { flex-wrap: wrap; }
+    .viewbar .spacer { display: none; }
+    .row label, .sheet .name { flex: 0 0 92px; }
+    .row .val { flex: 0 0 52px; }
+    header { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+    footer { gap: 6px 14px; }
+    #status { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>HalftoneCuttable</h1>
+  <span class="sub">image &rarr; self-supporting holes &rarr; laser-cuttable SVG</span>
+</header>
+
+<main>
+  <aside>
+    <details open>
+      <summary>Image</summary>
+      <div class="body">
+        <div id="drop">Drop an image, or click to choose</div>
+        <input type="file" id="file" accept="image/*" hidden>
+        <div class="samples">
+          <button data-sample="sphere">Sphere</button>
+          <button data-sample="ramp">Ramp</button>
+          <button data-sample="rings">Rings</button>
+          <button data-sample="rhino">Rhino</button>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Tone</summary>
+      <div class="body">
+        <div class="row">
+          <label for="gamma">Gamma</label>
+          <input type="range" id="gamma" min="0.4" max="3" step="0.05" value="1">
+          <span class="val" id="gammaVal">1.00</span>
+        </div>
+        <div class="row">
+          <label for="brightness">Brightness</label>
+          <input type="range" id="brightness" min="0.2" max="3" step="0.05" value="1">
+          <span class="val" id="brightnessVal">1.00</span>
+        </div>
+        <div class="row">
+          <label for="saturation">Saturation</label>
+          <input type="range" id="saturation" min="0" max="2" step="0.05" value="1">
+          <span class="val" id="saturationVal">1.00</span>
+        </div>
+        <p class="note">Gamma, brightness and saturation are applied first, before any Style filter -- the Source view shows exactly what they did. Tone is mixed in linear light, as the eye averages a pattern seen from a distance.</p>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Style</summary>
+      <div class="body">
+        <div id="styleChain"></div>
+        <p class="note">Filters restyle the image before the pattern sees it. Tick one to use it; they run top to bottom, and ↑ ↓ change the order.</p>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Piece &amp; machine</summary>
+      <div class="body">
+        <div class="row">
+          <label for="widthMm">Piece width</label>
+          <input type="number" id="widthMm" min="10" max="2000" step="1" value="200">
+          <span class="unit">mm</span>
+        </div>
+        <div class="row">
+          <label for="web">Min web</label>
+          <input type="number" id="web" min="0.05" max="20" step="0.05" value="0.8">
+          <span class="unit">mm</span>
+        </div>
+        <div class="row">
+          <label for="minHole">Min hole</label>
+          <input type="number" id="minHole" min="0" max="20" step="0.05" value="0.8">
+          <span class="unit">mm</span>
+        </div>
+        <div class="row">
+          <label for="kerf">Kerf</label>
+          <input type="number" id="kerf" min="0" max="2" step="0.01" value="0.15">
+          <span class="unit">mm</span>
+        </div>
+        <div class="row">
+          <label for="speed">Cut speed</label>
+          <input type="number" id="speed" min="0.1" max="1000" step="1" value="20">
+          <span class="unit">mm/s</span>
+        </div>
+        <div class="row">
+          <label for="pierce">Pierce time</label>
+          <input type="number" id="pierce" min="0" max="10" step="0.05" value="0.3">
+          <span class="unit">s</span>
+        </div>
+        <p class="note" id="gridNote"></p>
+        <p class="note">Min web is the thinnest metal left anywhere, including at the edge; about the sheet thickness is a safe start. Min hole is the smallest finished hole worth cutting, and is raised to 1.5&times; the kerf if it is below that.</p>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Sheets</summary>
+      <div class="body">
+        <div class="row">
+          <label for="mode">Mode</label>
+          <select id="mode">
+            <option value="bw" selected>Black &amp; white · 1 sheet</option>
+            <option value="color">Stacked colour sheets</option>
+          </select>
+        </div>
+        <div class="group" id="bwGroup">
+          <div class="sheet"><span class="name">Sheet</span><input type="color" id="sheetColor" value="#2b2b2b"><span class="hex"></span></div>
+          <div class="sheet"><span class="name">Behind the holes</span><input type="color" id="backdropColor" value="#ffffff"><span class="hex"></span></div>
+          <p class="note">Removed metal reads as white. The preview colours are only for looking at: the tone model is always "open area = brightness".</p>
+        </div>
+        <div class="group" id="colorGroup" hidden>
+          <div class="row">
+            <label for="nSheets">Sheets</label>
+            <select id="nSheets">
+              <option value="2">2 · 1 cut + base</option>
+              <option value="3" selected>3 · 2 cut + base</option>
+              <option value="4">4 · 3 cut + base</option>
+            </select>
+          </div>
+          <div id="palette"></div>
+          <div class="buttons" style="margin:6px 0">
+            <button id="suggest">Suggest from image</button>
+          </div>
+          <div class="row">
+            <label for="reg">Registration</label>
+            <input type="number" id="reg" min="0" max="5" step="0.05" value="0.3">
+            <span class="unit">mm</span>
+          </div>
+          <p class="note">Top sheet first, solid base last. Deeper holes are offset from the one above by the registration allowance on every side, so a small misalignment when stacking does not show a sliver of the wrong colour. Where colours blend within a hole they nest smaller; where a hole shows one sheet they are cut larger and hide under the top sheet. The base shows only through every hole, so give it the colour the image needs least.</p>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Pattern</summary>
+      <div class="body">
+        <div class="row">
+          <label for="method">Method</label>
+          <select id="method"></select>
+        </div>
+        <p class="note" id="methodBlurb"></p>
+        <div id="methodParams"></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Output</summary>
+      <div class="body">
+        <div class="buttons">
+          <button class="primary" id="exportAll">Export all SVG</button>
+          <button class="primary" id="exportAllDxf">Export all DXF</button>
+          <button id="exportPng">Export PNG</button>
+        </div>
+        <div class="buttons" id="layerExports" style="margin-top:6px"></div>
+        <p class="note">One file per sheet, in mm. Holes are <b style="color:#6f8bff">blue</b>, the outline is <b style="color:#ff6b6b">red</b> (in DXF, layers HOLES and OUTLINE): cut blue first, so the piece stays in the sheet until its holes are done. Paths are already offset for the kerf, so turn off kerf offset in the laser software. DXF is R12; if your software asks for its units, they are millimetres. DXF names end in the sheet's colour.</p>
+      </div>
+    </details>
+  </aside>
+
+  <section class="preview">
+    <div class="viewbar">
+      <div class="seg" id="viewSeg">
+        <button data-view="result" aria-pressed="true">Result</button>
+        <button data-view="backlit" aria-pressed="false">Backlit</button>
+        <button data-view="cut" aria-pressed="false">Cut paths</button>
+        <button data-view="source" aria-pressed="false">Source</button>
+        <button data-view="diff" aria-pressed="false">Difference</button>
+      </div>
+      <select id="cutLayer" hidden></select>
+      <div class="spacer"></div>
+      <span id="hint" class="note"></span>
+    </div>
+    <div class="stage">
+      <div class="canvaswrap" id="wrap">
+        <canvas id="view"></canvas>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span><b id="statCells">—</b></span>
+  <span>holes <b id="statHoles">—</b></span>
+  <span>open <b id="statOpen">—</b></span>
+  <span>thinnest web <b id="statWeb">—</b></span>
+  <span>dropped <b id="statDropped">—</b></span>
+  <span>cut <b id="statCut">—</b></span>
+  <span>est. time <b id="statTime">—</b></span>
+  <span title="mean |rendered − target|: is the pattern doing its job?">fidelity <b id="statFid">—</b></span>
+  <span title="mean |target − source|: how much of the image the sheet can express at all">reach <b id="statReach">—</b></span>
+  <span id="methodNote" class="note"></span>
+  <span id="status">idle</span>
+</footer>
+
+<script>
+  // A CLASSIC script, deliberately: it still runs when the module graph does
+  // not. Opened from the filesystem the app's imports are CORS-blocked before
+  // any of its code executes, so the UI renders but nothing ever responds.
+  if (location.protocol === 'file:') {
+    var b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:99;background:#fff;color:#222;' +
+      'font:14px/1.6 system-ui,sans-serif;padding:40px;max-width:640px;margin:auto;height:max-content';
+    b.innerHTML =
+      '<h2>This page has to be served over HTTP</h2>' +
+      '<p>Browsers block ES module imports from <code>file://</code>, so the app cannot ' +
+      'load its code. No install needed — run the bundled server from this folder:</p>' +
+      '<pre style="background:#f4f4f4;padding:10px">powershell -ExecutionPolicy Bypass -File serve.ps1</pre>' +
+      '<p>then open <a href="http://localhost:8080/">http://localhost:8080/</a>. ' +
+      'Any other static server works too.</p>';
+    document.body.appendChild(b);
+  }
+</script>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>

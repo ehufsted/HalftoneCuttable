@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>HalftoneCuttable verification</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; max-width: 1000px; color: #222; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
+  p { margin: 4px 0; }
+  .pass { color: #0a0; font-weight: 600; } .fail { color: #c00; font-weight: 600; }
+  pre { background: #f7f7f7; padding: 8px; overflow-x: auto; }
+  .note { color: #666; }
+  details { margin: 12px 0 18px; padding: 8px 12px; background: #fafafa; border: 1px solid #e2e2e2; border-radius: 4px; }
+  summary { cursor: pointer; font-weight: 600; }
+  .pick { display: inline-block; margin: 1px 10px 1px 0; white-space: nowrap; }
+  .pick.on { background: #fff3c4; border-radius: 3px; padding: 0 3px; }
+  .pick a { color: #06c; text-decoration: none; }
+  button { font: inherit; padding: 3px 12px; cursor: pointer; }
+</style>
+<h1>HalftoneCuttable verification</h1>
+<p class="note">
+  Shapes, colour separation, export, tone, and the property the app exists for: every cut sheet
+  is one piece. Each section states its prediction before it measures. Tests live in
+  <code>tests/</code>; this page only paints their output. Append <code>?only=structure</code>
+  to run a subset.
+</p>
+<div id="sections"></div>
+<div id="out">Running…</div>
+
+<script>
+  // Classic script: still runs when the module graph cannot load from file://.
+  if (location.protocol === 'file:') {
+    document.getElementById('out').innerHTML =
+      '<p class="fail">This page has to be served over HTTP, not opened from disk.</p>' +
+      '<pre>powershell -ExecutionPolicy Bypass -File serve.ps1</pre>' +
+      '<p class="note">then open <a href="http://localhost:8080/verify.html">http://localhost:8080/verify.html</a>.</p>';
+  }
+</script>
+<script type="module" src="./tests/report.js"></script>

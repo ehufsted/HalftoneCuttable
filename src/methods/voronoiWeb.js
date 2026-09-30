@@ -25,17 +25,17 @@
 //             tone -- the line is paid for by the rest of each cell's web -- until
 //             a cell cannot shrink its other walls any further.
 //
-// COLOUR REGIONS (param `regions`, stacked-colour mode only):
+// COLOR REGIONS (param `regions`, stacked-color mode only):
 //   mixed  -- each cell may show any mix of the sheets, through nested holes,
 //             exactly as the square grid does.
 //   solid  -- each cell shows the top sheet and ONE other: the image is split into
 //             regions by which sheet it is nearest, region boundaries are pinned
-//             like edges, and inside a region only tone varies. Purer colour,
+//             like edges, and inside a region only tone varies. Purer color,
 //             stained-glass look; no blending within a cell.
 //             The sheets in between are cut LARGER than the top hole, by the
 //             registration allowance per sheet, so they hide under the top sheet
 //             and the top hole alone is the window: a small misalignment shows
-//             nothing but the region's colour. (Mixed mode nests them SMALLER,
+//             nothing but the region's color. (Mixed mode nests them SMALLER,
 //             because there the rings are meant to show.) The cost is that the
 //             top hole must leave room for them, so a deep sheet's cells reach
 //             a little less open area.
@@ -56,8 +56,8 @@ export const params = [
     when: (p) => p.edges === 'lines' },
   { key: 'edgeThreshold', label: 'Edge threshold', type: 'range', min: 0.05, max: 0.9, step: 0.05, def: 0.3,
     when: (p) => p.edges !== 'off' },
-  { key: 'regions', label: 'Colour regions', type: 'select', def: 'mixed',
-    options: [['mixed', 'Mixed colours'], ['solid', 'Solid colours']],
+  { key: 'regions', label: 'Color regions', type: 'select', def: 'mixed',
+    options: [['mixed', 'Mixed colors'], ['solid', 'Solid colors']],
     when: (p, env) => env.mode === 'color' },
   { key: 'refine', label: 'Detail refine', type: 'range', min: 0, max: 0.7, step: 0.05, def: 0.4 },
   { key: 'relax', label: 'Relax', type: 'range', min: 0, max: 6, step: 1, def: 2 },

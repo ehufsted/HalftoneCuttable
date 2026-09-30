@@ -1,6 +1,6 @@
 // Stencil: bridges hold every island in, in the style asked for; floating parts
 // come out as separate pieces when allowed; no metal thinner than the web and no
-// slot narrower than the smallest hole; the kerf offset; colour sheets layered by
+// slot narrower than the smallest hole; the kerf offset; color sheets layered by
 // palette region with the registration extension; halftone inside shapes.
 //
 // Structure is checked on an INDEPENDENT raster: the sheet's traced contours are
@@ -122,7 +122,7 @@ export function run() {
       `depths in order: ${[...new Set(depths)].join(' → ')}`);
   }
 
-  // ---- colour: layered by palette region, registration hidden under the top sheet
+  // ---- color: layered by palette region, registration hidden under the top sheet
   {
     const pal = ['#202020', '#d02020', '#2040d0'];
     const s = { ...base, mode: 'color', palette: pal, reg: 0.3 };
@@ -140,15 +140,15 @@ export function run() {
     const firstCut = (C, from) => { for (let i = from; i < ww; i++) if (C[row * ww + i]) return i; return -1; };
     const extRight = (lastCut(cuts[1]) - lastCut(cuts[0])) / k;
     const extLeft = firstCut(cuts[1], 0) / k - 30;      // the blue block's left edge is at 30 mm
-    check('colour: the blue sheet’s cut runs under the dark top sheet by the registration allowance',
+    check('color: the blue sheet’s cut runs under the dark top sheet by the registration allowance',
       Math.abs(extRight - s.reg) <= 1.5 / k, `extends ${num(extRight, 3)} mm past the top sheet’s edge (want ${s.reg})`);
-    check('colour: and does not reach into the red, where it would show', Math.abs(extLeft) <= 1.5 / k,
+    check('color: and does not reach into the red, where it would show', Math.abs(extLeft) <= 1.5 / k,
       `starts ${num(extLeft, 3)} mm from the red/blue boundary`);
     const pieces = b.layers.map((L) => pieceCount({ ...b, kerf: s.kerf }, L, PX));
-    check('colour: every cut sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
+    check('color: every cut sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
     let err = 0;
     for (let i = 0; i < b.N * 3; i++) err += Math.abs(b.achieved[i] - b.target[i]);
-    check('colour: each region shows its own sheet', err / (b.N * 3) < 0.02, `mean |Δ| ${num(err / (b.N * 3), 4)} (linear)`);
+    check('color: each region shows its own sheet', err / (b.N * 3) < 0.02, `mean |Δ| ${num(err / (b.N * 3), 4)} (linear)`);
   }
 
   // ---- halftone inside shapes
@@ -182,6 +182,32 @@ export function run() {
     const mean = (hs) => hs.reduce((s, hl) => s + hl.a, 0) / hs.length;
     check('halftone: holes grow with the tone', mean(right) > mean(left),
       `mean cut diameter ${num(mean(left), 3)} mm on the dark side, ${num(mean(right), 3)} on the light`);
+  }
+
+  // ---- border: folded into the structural rim at the raster stage (not
+  // dropped from the traced loops afterward), so a loop that merely grazes the
+  // border is clipped, not thrown away whole.
+  {
+    // A border well clear of the rings changes nothing: same three islands.
+    const plain0 = method.build(img, base, {});
+    const clear = method.build(img, { ...base, border: 4 }, {});
+    check('a border clear of the shapes leaves them alone',
+      clear.layers[0].length === plain0.layers[0].length && clear.debug.unresolved === 0,
+      `${plain0.layers[0].length} islands unbordered, ${clear.layers[0].length} with a 4 mm border`);
+
+    // A border that reaches into a ring clips it -- the rest of the sheet still
+    // traces, and nothing is cut inside the border band.
+    const wide = method.build(img, { ...base, border: 10 }, {});
+    let inBorder = 0;
+    for (const hl of wide.layers[0]) {
+      for (let i = 0; i < hl.fx.length; i++) {
+        const x = hl.fx[i], y = hl.fy[i];
+        if (x < 10 || y < 10 || x > wide.widthMm - 10 || y > wide.heightMm - 10) inBorder++;
+      }
+    }
+    check('nothing is cut inside a wide border', inBorder === 0, `${inBorder} finished vertices inside the border band`);
+    check('the rest of the sheet still traces, one piece',
+      wide.layers[0].length > 0 && pieceCount({ ...wide, kerf: base.kerf }, wide.layers[0], PX) === 1);
   }
 
   // ---- determinism

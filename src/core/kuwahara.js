@@ -3,7 +3,7 @@
 //
 // Around each pixel, an ELLIPSE stretched along the image's local direction (the
 // structure tensor, core/steer.js) is split into 8 soft sectors. Each sector's
-// weighted mean colour and spread are measured, and the output is the sector
+// weighted mean color and spread are measured, and the output is the sector
 // means blended with weight 1 / (1 + spread^q): the sectors lying across an edge
 // have a large spread and drop out, the ones on one side of it win. So flat areas
 // smooth into even patches while edges stay sharp -- and, with the ellipse
@@ -21,7 +21,7 @@
 // detail finer than the brush anyway.
 //
 // Sector weights are max(0, cos(θ - θ_k))^4 times a radial Gaussian: smooth,
-// overlapping neighbours (half-width about 46°), the role Papari's smoothed sector
+// overlapping neighbors (half-width about 46°), the role Papari's smoothed sector
 // functions play in the original, without their precomputed kernels.
 
 import { makeImage, resize } from '../shim/image.js';
@@ -45,7 +45,7 @@ export function kuwahara(rgba, p, widthMm) {
   const w = Math.max(4, Math.round(W * scale)), h = Math.max(4, Math.round(H * scale));
   const r = Math.max(1, rSrc * (w / W));
 
-  // colour planes (encoded, 0..1), at the working size
+  // color planes (encoded, 0..1), at the working size
   const src = [0, 1, 2].map(() => makeImage(W, H));
   for (let i = 0, q = 0; i < W * H; i++, q += 4) {
     src[0].data[i] = rgba.data[q] / 255; src[1].data[i] = rgba.data[q + 1] / 255; src[2].data[i] = rgba.data[q + 2] / 255;
@@ -80,7 +80,7 @@ export function kuwahara(rgba, p, widthMm) {
           const rho = Math.sqrt(rho2);
           for (let k = 0; k < SECTORS; k++) {
             let wk;
-            if (rho < 1e-9) wk = g / SECTORS;               // the centre belongs to every sector
+            if (rho < 1e-9) wk = g / SECTORS;               // the center belongs to every sector
             else {
               const c = (u * COS[k] + v * SIN[k]) / rho;
               if (c <= 0) continue;

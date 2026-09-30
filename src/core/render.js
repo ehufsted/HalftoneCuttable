@@ -39,7 +39,7 @@ export function holeTables(ctx, sizes, spec) {
   });
 }
 
-/** Index of the visible sheet at local offset (x, y) from the centre of `cell`. */
+/** Index of the visible sheet at local offset (x, y) from the center of `cell`. */
 function visibleIn(tables, cell, x, y) {
   for (let j = 0; j < tables.length; j++) {
     const t = tables[j];
@@ -56,7 +56,7 @@ function visibleIn(tables, cell, x, y) {
 }
 
 /**
- * Per cell, the visible area of each sheet, from S×S samples at sample centres.
+ * Per cell, the visible area of each sheet, from S×S samples at sample centers.
  * @returns {Float32Array} cols*rows*n, fractions summing to 1 per cell
  */
 export function measureCells(ctx, tables, S = 16) {
@@ -77,8 +77,8 @@ export function measureCells(ctx, tables, S = 16) {
   return out;
 }
 
-/** A cell's colour from its visible areas: D channels, linear. */
-export function cellColours(ctx, fractions, palette) {
+/** A cell's color from its visible areas: D channels, linear. */
+export function cellColors(ctx, fractions, palette) {
   const n = palette.length, D = palette[0].length, N = ctx.cols * ctx.rows;
   const out = new Float32Array(N * D);
   for (let c = 0; c < N; c++) {
@@ -149,7 +149,7 @@ export function rasterizeHoles(piece, layers, opts = {}) {
 }
 
 /**
- * Fill a set of closed loops even-odd at sample centres: a sample is inside if a
+ * Fill a set of closed loops even-odd at sample centers: a sample is inside if a
  * ray from it crosses the loops an odd number of times, so an island loop inside
  * an outer loop reads as a hole in it, whichever way either runs.
  */
@@ -162,7 +162,7 @@ function fillEvenOdd(loops, sw, sh, k) {
       const x0 = L.xs[i] * k, y0 = L.ys[i] * k, x1 = L.xs[j] * k, y1 = L.ys[j] * k;
       if (y0 === y1) continue;
       const lo = Math.min(y0, y1), hi = Math.max(y0, y1);
-      // rows whose centre y = r + 0.5 lies in [lo, hi)
+      // rows whose center y = r + 0.5 lies in [lo, hi)
       for (let r = Math.max(0, Math.ceil(lo - 0.5)); r < sh && r + 0.5 < hi; r++) {
         const t = (r + 0.5 - y0) / (y1 - y0);
         rows[r].push(x0 + t * (x1 - x0));
@@ -181,7 +181,7 @@ function fillEvenOdd(loops, sw, sh, k) {
 }
 
 /**
- * Composite a preview in a palette of linear RGB colours (one per sheet), mixing
+ * Composite a preview in a palette of linear RGB colors (one per sheet), mixing
  * in linear light. Samples outside the piece show `background`.
  * @returns {Uint8ClampedArray} RGBA
  */

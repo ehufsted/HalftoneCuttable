@@ -6,13 +6,14 @@
 // transform (core/edt.js), so "wider than w" means a true disc of diameter w:
 //
 //   1. POSTERIZE. B&W: cut where the (smoothed) image is lighter than the
-//      threshold -- removed metal reads white. Colour: each pixel takes the
-//      nearest sheet colour; sheet j is cut wherever the pixel's sheet lies deeper
-//      than j. A frame of web + kerf/2 round the piece is always metal.
-//   2. REGISTRATION (colour). A deeper sheet's cut is extended by j·reg into areas
+//      threshold -- removed metal reads white. Color: each pixel takes the
+//      nearest sheet color; sheet j is cut wherever the pixel's sheet lies deeper
+//      than j. A frame of web + kerf/2 (plus the border setting, if any) round
+//      the piece is always metal.
+//   2. REGISTRATION (color). A deeper sheet's cut is extended by j·reg into areas
 //      where a sheet above it is solid, so it hides under that sheet and a small
 //      misalignment when stacking shows nothing -- the same rule as the other
-//      patterns' solid colour.
+//      patterns' solid color.
 //   3. CLEAN UP. Cut slots narrower than the smallest hole are filled (an
 //      opening of the cut). Metal narrower than the web is THICKENED, not removed:
 //      the thin parts are grown by web/2, so a thin line survives as a line.
@@ -75,7 +76,11 @@ export function build(rgba, settings, params = {}) {
 
   // ---- 1. posterize
   const src = new Float32Array(NP * D), lab = new Uint8Array(NP);
-  const e = web + kerf / 2;
+  // The blank border, if any, is added to the structural rim here, at the raster
+  // stage, rather than dropped from the traced loops afterward -- a contour here
+  // can span most of the sheet, and dropping one whole loop because it grazes
+  // the border would take far more than the border with it.
+  const e = web + kerf / 2 + (s.border || 0);
   const frame = borderFrame(ww, wh, k, ky, W, H, e);
   const encPal = palette.map((c) => c.map((v) => toEncoded(v)));
   for (let q = 0; q < NP; q++) {
@@ -202,9 +207,9 @@ export function build(rgba, settings, params = {}) {
         const l = lab[q];
         if (l === 0 || dmax <= 0) continue;
         const F = fit(tone(q, l));
-        // dOther is measured between pixel CENTRES: the shape's edge lies half a
-        // pixel nearer, and the hole's centre can sit up to 0.71 px from its
-        // pixel's centre -- without this margin, holes poked out by up to a pixel
+        // dOther is measured between pixel CENTERS: the shape's edge lies half a
+        // pixel nearer, and the hole's center can sit up to 0.71 px from its
+        // pixel's center -- without this margin, holes poked out by up to a pixel
         const cap = Math.min(dmax, 2 * Math.max(0, dOther[q] - 1.25 / k));
         let d = Math.min(Math.sqrt((4 * F * p * p) / Math.PI), cap);
         if (d < hFloor) d = hFloor <= cap && F * p * p >= (Math.PI * hFloor * hFloor) / 8 ? hFloor : 0;

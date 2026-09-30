@@ -214,18 +214,41 @@
         </div>
         <div class="row">
           <label for="web">Min web</label>
-          <input type="number" id="web" min="0.05" max="20" step="0.05" value="0.8">
+          <input type="number" id="web" min="0.05" max="20" step="0.05" value="1.0">
           <span class="unit">mm</span>
         </div>
         <div class="row">
           <label for="minHole">Min hole</label>
-          <input type="number" id="minHole" min="0" max="20" step="0.05" value="0.8">
+          <input type="number" id="minHole" min="0" max="20" step="0.05" value="1.0">
           <span class="unit">mm</span>
         </div>
         <div class="row">
           <label for="kerf">Kerf</label>
-          <input type="number" id="kerf" min="0" max="2" step="0.01" value="0.15">
+          <input type="number" id="kerf" min="0" max="2" step="0.01" value="0">
           <span class="unit">mm</span>
+        </div>
+        <div class="row">
+          <label for="border">Border</label>
+          <input type="number" id="border" min="0" max="100" step="0.5" value="0">
+          <span class="unit">mm</span>
+        </div>
+        <p class="note">A blank margin all round the piece: no pattern hole is cut into it, other than the alignment holes below.</p>
+        <div class="row">
+          <label for="alignHoles">Alignment holes</label>
+          <input type="checkbox" id="alignHoles">
+        </div>
+        <div class="group" id="alignFields" hidden>
+          <div class="row">
+            <label for="alignDist">Distance from corner</label>
+            <input type="number" id="alignDist" min="1" max="100" step="0.5" value="8">
+            <span class="unit">mm</span>
+          </div>
+          <div class="row">
+            <label for="alignDia">Hole diameter</label>
+            <input type="number" id="alignDia" min="0.5" max="20" step="0.1" value="3">
+            <span class="unit">mm</span>
+          </div>
+          <p class="note">Four fixed holes, the same on every exported sheet including the solid base, for a pin to hold the stack in register while gluing or bonding.</p>
         </div>
         <div class="row">
           <label for="speed">Cut speed</label>
@@ -249,13 +272,13 @@
           <label for="mode">Mode</label>
           <select id="mode">
             <option value="bw" selected>Black &amp; white · 1 sheet</option>
-            <option value="color">Stacked colour sheets</option>
+            <option value="color">Stacked color sheets</option>
           </select>
         </div>
         <div class="group" id="bwGroup">
           <div class="sheet"><span class="name">Sheet</span><input type="color" id="sheetColor" value="#2b2b2b"><span class="hex"></span></div>
           <div class="sheet"><span class="name">Behind the holes</span><input type="color" id="backdropColor" value="#ffffff"><span class="hex"></span></div>
-          <p class="note">Removed metal reads as white. The preview colours are only for looking at: the tone model is always "open area = brightness".</p>
+          <p class="note">Removed metal reads as white. The preview colors are only for looking at: the tone model is always "open area = brightness".</p>
         </div>
         <div class="group" id="colorGroup" hidden>
           <div class="row">
@@ -272,10 +295,10 @@
           </div>
           <div class="row">
             <label for="reg">Registration</label>
-            <input type="number" id="reg" min="0" max="5" step="0.05" value="0.3">
+            <input type="number" id="reg" min="0" max="5" step="0.05" value="0">
             <span class="unit">mm</span>
           </div>
-          <p class="note">Top sheet first, solid base last. Deeper holes are offset from the one above by the registration allowance on every side, so a small misalignment when stacking does not show a sliver of the wrong colour. Where colours blend within a hole they nest smaller; where a hole shows one sheet they are cut larger and hide under the top sheet. The base shows only through every hole, so give it the colour the image needs least.</p>
+          <p class="note">Top sheet first, solid base last. Deeper holes are offset from the one above by the registration allowance on every side, so a small misalignment when stacking does not show a sliver of the wrong color. Where colors blend within a hole they nest smaller; where a hole shows one sheet they are cut larger and hide under the top sheet. The base shows only through every hole, so give it the color the image needs least.</p>
         </div>
       </div>
     </details>
@@ -301,7 +324,7 @@
           <button id="exportPng">Export PNG</button>
         </div>
         <div class="buttons" id="layerExports" style="margin-top:6px"></div>
-        <p class="note">One file per sheet, in mm. Holes are <b style="color:#6f8bff">blue</b>, the outline is <b style="color:#ff6b6b">red</b> (in DXF, layers HOLES and OUTLINE): cut blue first, so the piece stays in the sheet until its holes are done. Paths are already offset for the kerf, so turn off kerf offset in the laser software. DXF is R12; if your software asks for its units, they are millimetres. DXF names end in the sheet's colour.</p>
+        <p class="note">One file per sheet, in mm. Holes are <b style="color:#6f8bff">blue</b>, the outline is <b style="color:#ff6b6b">red</b> (in DXF, layers HOLES and OUTLINE): cut blue first, so the piece stays in the sheet until its holes are done. Paths are already offset for the kerf, so turn off kerf offset in the laser software. DXF is R12; if your software asks for its units, they are millimeters. DXF names end in the sheet's color.</p>
       </div>
     </details>
   </aside>

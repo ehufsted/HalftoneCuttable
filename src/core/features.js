@@ -1,5 +1,5 @@
 // Image features the Voronoi web adapts to: where the detail is, where the edges
-// are, and (for solid-colour stacks) which sheet each region belongs to.
+// are, and (for solid-color stacks) which sheet each region belongs to.
 //
 // All work on the method's work raster, in pixels. Inputs are ENCODED values (as a
 // screen shows them): an edge is a change a person sees, and in linear light the
@@ -49,7 +49,7 @@ function quantile(arr, q) {
 
 /**
  * How much detail each pixel is in, [0, 1]: gradient magnitude at scale sigma,
- * normalised to its own 95th percentile (so it means the same for a soft image
+ * normalized to its own 95th percentile (so it means the same for a soft image
  * and a hard one), then spread by a second blur so cells shrink a little ahead of
  * an edge rather than only on it.
  */
@@ -65,7 +65,7 @@ export function detailMap(chans, sigma) {
  * Edge points: a thin (non-maximum-suppressed) gradient ridge at scale sigma,
  * above `threshold` × the 99th-percentile magnitude, located to sub-pixel by a
  * parabola across the ridge.
- * @returns {Array<{x,y,nx,ny,s}>} pixel coordinates (pixel centres at +0.5),
+ * @returns {Array<{x,y,nx,ny,s}>} pixel coordinates (pixel centers at +0.5),
  *   unit normal across the edge, strength
  */
 export function edgePoints(chans, sigma, threshold) {
@@ -95,14 +95,14 @@ export function edgePoints(chans, sigma, threshold) {
 }
 
 /**
- * Solid-colour regions: which sheet each pixel belongs to. A pixel is assigned
+ * Solid-color regions: which sheet each pixel belongs to. A pixel is assigned
  * the sheet j >= 1 whose mix with the top sheet (the line c0 -> cj) comes
  * closest to it, since in solid mode a cell can only show the top sheet and one
  * other. The assignment is then smoothed (blur each one-hot mask, take the
  * largest) so regions follow shapes rather than noise.
  *
  * @param {Array<{data:Float32Array}>} planes  linear RGB, one image each
- * @param {number[][]} paletteEnc  sheet colours, ENCODED rgb
+ * @param {number[][]} paletteEnc  sheet colors, ENCODED rgb
  * @param {(v:number)=>number} encode  linear -> encoded
  * @returns {{labels:Uint8Array, soft:Array<{w,h,data}>}} labels in 1..n-1;
  *   soft[j-1] is sheet j's smoothed mask
@@ -139,7 +139,7 @@ export function regionLabels(planes, paletteEnc, encode, sigma) {
 
 /**
  * Points on the boundaries between regions, one per pair of differing
- * neighbours, with the normal taken from the smoothed mask (so it follows the
+ * neighbors, with the normal taken from the smoothed mask (so it follows the
  * shape, not the pixel staircase).
  */
 export function boundaryPoints(labels, soft, w, h) {

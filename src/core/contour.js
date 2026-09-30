@@ -1,7 +1,7 @@
 // Contours of a scalar field: marching squares, joined into closed, consistently
 // oriented loops, then simplified.
 //
-// The field is sampled at pixel centres (i + 0.5, j + 0.5). Everything outside
+// The field is sampled at pixel centers (i + 0.5, j + 0.5). Everything outside
 // the raster counts as far OUTSIDE, so every loop closes. "Inside" is
 // field < level, and every loop keeps inside on the same side, so outer
 // boundaries and the boundaries of islands within them come out with opposite
@@ -50,10 +50,10 @@ export function traceLoops(field, w, h, level) {
       if (crossed.length === 2) {
         pairs = [[crossed[0], crossed[1]]];
       } else {
-        // saddle: the centre decides which diagonal is connected; the other
+        // saddle: the center decides which diagonal is connected; the other
         // two corners are each cut off by their own segment
-        const centreIn = (v[0] + v[1] + v[2] + v[3]) / 4 < level;
-        const isolate = [0, 1, 2, 3].filter((c) => inn[c] !== centreIn);
+        const centerIn = (v[0] + v[1] + v[2] + v[3]) / 4 < level;
+        const isolate = [0, 1, 2, 3].filter((c) => inn[c] !== centerIn);
         pairs = isolate.map((c) => [(c + 3) & 3, c]);   // corner c touches edges c-1 and c
       }
       for (const [e1, e2] of pairs) {

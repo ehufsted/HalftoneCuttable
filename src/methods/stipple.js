@@ -4,8 +4,8 @@
 // and one kind of heat input everywhere -- no tiny holes that weld shut, no huge
 // ones that warp. The look is a drawing in dots rather than a screen.
 //
-// ONE PIECE BY CONSTRUCTION. The holes are circles, and every pair of centres is
-// at least `sMin = widest hole + web` apart, and every centre is at least
+// ONE PIECE BY CONSTRUCTION. The holes are circles, and every pair of centers is
+// at least `sMin = widest hole + web` apart, and every center is at least
 // `web + widest/2` from the outline. Disjoint convex holes that far apart cannot
 // enclose metal (docs/architecture.md, "the hole model"). The spacing is ENFORCED
 // after placement, not hoped for: a repair pass pushes apart any pair that
@@ -29,26 +29,26 @@
 // target -- before it was, 0.7 still lost 116, because dots owed to the frame
 // were packed into the interior.
 //
-// COLOUR (stacked sheets): each dot shows ONE sheet, so colours mix by the
+// COLOR (stacked sheets): each dot shows ONE sheet, so colors mix by the
 // proportion of dots of each kind, like pointillism. A dot showing sheet l is
 // holed through sheets 0..l-1; the deeper holes are wider by the registration
 // allowance per sheet and hide under the top one, as in the Voronoi web's solid
 // mode, so a small misalignment shows nothing extra. Sheets are assigned by
 // walking the dots in Hilbert order and paying each sheet the share it is owed
-// (1-D error diffusion along the curve), which spreads each colour evenly.
+// (1-D error diffusion along the curve), which spreads each color evenly.
 
 import { linearPlanes, prepareRaster } from '../core/units.js';
 import { resize } from '../shim/image.js';
 import { mulberry32 } from '../shim/random.js';
 import { luminance } from '../core/color.js';
-import { solveMix, fitMix, mixColour } from '../core/separate.js';
+import { solveMix, fitMix, mixColor } from '../core/separate.js';
 import { SeedHash } from '../core/voronoi.js';
 import { lloyd } from '../core/seeds.js';
 import { hilbertIndex, pow2At } from '../core/hilbert.js';
 
 export const id = 'stipple';
 export const label = 'Stipple';
-export const blurb = 'Every hole the same size; tone comes from how densely they are packed. Blue-noise spacing, never closer than the min web. In colour, each dot shows one sheet.';
+export const blurb = 'Every hole the same size; tone comes from how densely they are packed. Blue-noise spacing, never closer than the min web. In color, each dot shows one sheet.';
 
 export const params = [
   { key: 'dot', label: 'Dot size', type: 'range', min: 0.5, max: 6, step: 0.1, def: 1.5, unit: 'mm', dp: 1 },
@@ -91,7 +91,7 @@ export function build(rgba, settings, params = {}) {
       if (bw) x[0] = Math.max(0, Math.min(1, luminance(r, g, b)));
       else { x[0] = r; x[1] = g; x[2] = b; }
       for (let k = 0; k < D; k++) srcPix[q * D + k] = x[k];
-      // No dot centre can sit in the frame (within web + dDeep/2 of the outline),
+      // No dot center can sit in the frame (within web + dDeep/2 of the outline),
       // so the frame is metal: asking for dots there would pack them into the
       // interior instead, too close to fit.
       const i = q % ww, j = (q - i) / ww;
@@ -176,7 +176,7 @@ export function build(rgba, settings, params = {}) {
       const w = cellAt((i + 0.5) / kx, (j + 0.5) / ky);
       if (w < 0) continue;
       for (let k = 0; k < n; k++) m[k] = mixPix[q * n + k];
-      mixColour(m, palette, col);
+      mixColor(m, palette, col);
       for (let k = 0; k < D; k++) { target[w * D + k] += col[k]; source[w * D + k] += srcPix[q * D + k]; }
       cnt[w]++;
     }
@@ -282,7 +282,7 @@ function enforceSpacing(xs, ys, rect, sMin, rand) {
 /**
  * Which sheet each dot shows: walk the dots in Hilbert order and pay each
  * sheet the share it is owed under it (1-D error diffusion along the curve),
- * which spreads each colour evenly.
+ * which spreads each color evenly.
  * @returns {Uint8Array} lab[i] = sheet index dot i shows (>= 1)
  */
 function assignSheets(xs, ys, N, n, nCut, n2, ww, wh, kx, ky, pixOf, mixPix) {

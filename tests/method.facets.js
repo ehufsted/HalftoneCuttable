@@ -3,11 +3,11 @@
 // PREDICTIONS. Everything the Voronoi web guarantees, since it is the same engine:
 // tone from exact areas, one piece with every web at least the setting (checked
 // by the method's own figure, by polygon distance, and by flood fill), edges as
-// clean breaks (no facet straddles one) and as metal lines, solid colour regions.
+// clean breaks (no facet straddles one) and as metal lines, solid color regions.
 // Particular to triangles: the facets tile the piece's inset rectangle exactly,
 // and the triangulation reports nothing dropped or malformed.
 
-import { check, section, num, greyRamp, noiseRGBA, makeRGBA, plain } from './runner.js';
+import { check, section, num, grayRamp, noiseRGBA, makeRGBA, plain } from './runner.js';
 import method from '../src/methods/facets.js';
 import { pieceCount } from '../src/core/structure.js';
 import { rasterizeHoles } from '../src/core/render.js';
@@ -40,11 +40,11 @@ function geometricWeb(b, j, kerf) {
 }
 
 export function run() {
-  section('method.facets', 'Tiling and a clean triangulation; tone; one piece, three ways; clean breaks and metal lines; solid colour; determinism.');
+  section('method.facets', 'Tiling and a clean triangulation; tone; one piece, three ways; clean breaks and metal lines; solid color; determinism.');
 
   // ---- tiling, tone
   {
-    const b = method.build(greyRamp(300, 200), base, { edges: 'off', pitch: 5 });
+    const b = method.build(grayRamp(300, 200), base, { edges: 'off', pitch: 5 });
     const [x0, y0, x1, y1] = b.debug.rect;
     const tiled = b.debug.cells.reduce((a, C) => a + polyArea(C), 0);
     check('the facets tile the inset rectangle exactly; the triangulation is clean',
@@ -68,9 +68,9 @@ export function run() {
     const cases = [
       ['B&W noise, edges off', noiseRGBA(200, 150, 5, false), {}, { edges: 'off' }],
       ['B&W split, metal lines', split([110, 110, 110], [230, 230, 230]), {}, { edges: 'lines', lineWidth: 1 }],
-      ['colour noise, mixed, 4 sheets', noiseRGBA(200, 150, 6),
+      ['color noise, mixed, 4 sheets', noiseRGBA(200, 150, 6),
         { mode: 'color', palette: ['#f0f0f0', '#e0b000', '#c01020', '#101010'], reg: 0.3 }, { regions: 'mixed' }],
-      ['colour split, solid, 3 sheets', split([200, 30, 30], [30, 60, 200]),
+      ['color split, solid, 3 sheets', split([200, 30, 30], [30, 60, 200]),
         { mode: 'color', palette: ['#202020', '#d02020', '#2040d0'], reg: 0.3 }, { regions: 'solid', edges: 'lines' }],
     ];
     const fails = [];
@@ -112,7 +112,7 @@ export function run() {
       `metal within ±0.35 mm: ${num(100 * fl, 1)}% with lines, ${num(100 * fb, 1)}% with breaks`);
   }
 
-  // ---- solid colour regions
+  // ---- solid color regions
   {
     const s = { ...base, mode: 'color', palette: ['#202020', '#d02020', '#2040d0'], reg: 0.3 };
     const b = method.build(split([200, 30, 30], [30, 60, 200]), s, { regions: 'solid', edges: 'breaks', pitch: 5 });
@@ -122,7 +122,7 @@ export function run() {
       if ((cx < 28 && b.debug.labels[i] !== 1) || (cx > 32 && b.debug.labels[i] !== 2)) wrong++;
     });
     const st = straddlers(b, 30, 0.15);
-    check('solid: each side of the colour boundary gets its own sheet, and no facet straddles it', wrong === 0 && st === 0,
+    check('solid: each side of the color boundary gets its own sheet, and no facet straddles it', wrong === 0 && st === 0,
       `${wrong} facets on the wrong side, ${st} straddling`);
   }
 

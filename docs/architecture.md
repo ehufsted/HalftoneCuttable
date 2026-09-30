@@ -7,7 +7,7 @@ explains its reasoning; this page is what holds across modules.
 
 ```
 shim/      image resize/blur (copied verbatim from HalftoneWebPAL-1), mulberry32
-core/      units, shapes, colour, separate, diffuse, render, cutpaths, svg, structure,
+core/      units, shapes, color, separate, diffuse, render, cutpaths, svg, structure,
            holes (the hole model), polygon, voronoi, features, seeds, hilbert,
            edt (distance transform and morphology), contour (marching squares),
            cutsheet (the stencil/screen per-sheet pipeline and window scoring),
@@ -26,7 +26,7 @@ Dependencies run downward only. Nothing under `core/` imports `methods/`. This i
 ## The hole model
 
 Every method's `build()` returns the same thing (documented in `methods/index.js`):
-holes per cut sheet, plus per-cell target / achieved / source colours. The renderer,
+holes per cut sheet, plus per-cell target / achieved / source colors. The renderer,
 stats, SVG and pipeline only ever see that, so a new method needs no changes
 downstream. A hole is its **cut path** (what the beam follows), and the finished hole
 is that path grown by kerf/2. Two kinds: a rounded square (the grid) and a convex
@@ -44,8 +44,8 @@ Every hole stays inside its own cell, and its nominal size is at most `pitch −
 (`shapes.maxSize`). The grid sits in the piece with a margin of at least `web/2`.
 Together those give:
 
-- neighbouring holes along an axis always have ≥ `web` of metal between them;
-- diagonal neighbours have ≥ `web·√2`;
+- neighboring holes along an axis always have ≥ `web` of metal between them;
+- diagonal neighbors have ≥ `web·√2`;
 - an edge hole has ≥ `web` to the outline.
 
 So every cut sheet is one connected piece for any image. `tests/structure.js`
@@ -55,15 +55,15 @@ full width of the pitch) to show that the check can see islands.
 The Voronoi web's version: every hole is its cell inset by a margin of at least
 `web/2` from each wall, and the cells are clipped to the piece inset by `web/2`.
 Tests check it three independent ways: the method's own web figure, polygon distances
-between neighbouring holes, and a flood fill.
+between neighboring holes, and a flood fill.
 
 **The hex grid's version** (`methods/hexGrid.js`) is the square grid's argument on a
 honeycomb lattice instead of a square one: every hole's nominal size (its own
 flat-to-flat width) is at most the cell's inradius, doubled, less `web`, and the grid
 sits in the piece with a margin of at least `web/2`. The one property that makes this
-as simple as the square case: a regular hex tiling's six neighbour directions land
+as simple as the square case: a regular hex tiling's six neighbor directions land
 exactly on the cell's own six edge normals, so a hexagon hole (or a circle) has the
-same extent -- its own flat-to-flat width, or diameter -- toward every neighbour, with
+same extent -- its own flat-to-flat width, or diameter -- toward every neighbor, with
 no per-direction case to work out, unlike an arbitrary convex cell. A hexagon hole is
 the 'poly' kind (its area is the exact Steiner law, since a sharp hexagon's corners
 are what the beam itself rounds); a circle hole reuses the rounded-square family
@@ -89,15 +89,15 @@ amount.
 
 - **Linear light.** Area mixing is linear in light, so targets, mixes and scores are all
   linear. Only the loading and display edges are sRGB-encoded (`core/color.js`).
-- **Everything is a mix.** A cell shows a convex mix of the sheet colours, and the
+- **Everything is a mix.** A cell shows a convex mix of the sheet colors, and the
   weights are the visible areas. B&W is the two-sheet, one-channel case: a dark sheet
   and a light hole. `separate.solveMix` finds the closest mix exactly by trying every
   face of the simplex, which is at most 15 for 4 sheets.
 - **Unreachable by specification.** The largest hole leaves `1 − fMax` of the top
-  sheet in every cell, so pure white (or a pure base colour) cannot be reached.
+  sheet in every cell, so pure white (or a pure base color) cannot be reached.
   `targetImage` states the band, either squeezing into it or clipping to it, and the app
   scores against that band, not the source.
-- **Scores come from the exact area law, not a raster.** `separate.stackColours`
+- **Scores come from the exact area law, not a raster.** `separate.stackColors`
   computes them. An axis-aligned raster miscounts square holes systematically, because
   their edges hold one phase against the sample grid. The harness measured 2.6% on one
   square before the check was changed. The preview raster is checked against the area
@@ -135,20 +135,20 @@ amount.
   trade against each other.
 - **Walls go on edges through mirrored pairs.** A wall lies halfway between two seeds,
   so a pair placed symmetrically across an edge point puts one on the edge. Pairs are
-  pinned during relaxation. Region boundaries in solid-colour mode are pinned the
+  pinned during relaxation. Region boundaries in solid-color mode are pinned the
   same way.
 - **Metal lines** move the pinned walls in by `lineWidth/2` on each side, per edge
-  (`insetConvex` takes one offset per edge; the edge labels say which neighbour a wall
+  (`insetConvex` takes one offset per edge; the edge labels say which neighbor a wall
   faces).
 - **One tone band for all cells,** set where 90% of cells can reach it. A per-cell band
   would print detailed areas darker, because small cells have less room for a hole.
   The band is measured **as if no wall carried a line.** Counting the lines thickened
   every web in a busy photo; leaving the line cells out raised the band instead,
   because they are the small ones. Both mistakes were made and are now tested.
-- **Solid colour hides the in-between sheets.** Mixed mode nests deeper holes smaller
+- **Solid color hides the in-between sheets.** Mixed mode nests deeper holes smaller
   by the registration allowance, because there the rings are meant to show. Solid mode
   cuts them *larger*, so they sit under the top sheet and the top hole alone is the
-  window. Nesting them smaller showed a ring of the wrong colour over about a quarter
+  window. Nesting them smaller showed a ring of the wrong color over about a quarter
   of each cell. The price is that deeper sheets reach less open area, so each sheet has
   its own band.
 - **Solid regions keep their error:** diffusion only passes error between cells of the
@@ -157,20 +157,20 @@ amount.
 ## Cell webs: one engine, three layouts
 
 `methods/cellWeb.js` is the Voronoi web's engine with the cell placement taken
-out. It covers reading the image, the detail and edge features, colour regions,
-the per-cell tone law, targets, diffusion over the cell graph, colour modes and
+out. It covers reading the image, the detail and edge features, color regions,
+the per-cell tone law, targets, diffusion over the cell graph, color modes and
 web figures. A **layout** places the cells: `{N, cells, sites, cellOfPixel, cellAt,
 isLine, notes, unit, debug}`. Any convex cells work, since the one-piece argument
 needs nothing else.
 
 - **Voronoi web** (`voronoiLayout`): seeds in mirrored pairs across edges, and a
   wall carries an edge line when it separates a pair. The split was checked
-  behaviour-preserving: all 16 Voronoi tests reproduced their numbers exactly.
+  behavior-preserving: all 16 Voronoi tests reproduced their numbers exactly.
 - **Facets** (`facetLayout`): Delaunay triangles over corners placed ON edges and
   region boundaries (pinned), a border ring, a detail-driven fill and Lloyd. A side
   is an edge wall when both its corners are on an edge, their normals agree, and it
-  runs along the edge. Triangle cell `t`'s edge `k` (vertex k→k+1) is labelled with
-  the neighbour opposite vertex `k+2` (Delaunay's convention). Pixels are assigned
+  runs along the edge. Triangle cell `t`'s edge `k` (vertex k→k+1) is labeled with
+  the neighbor opposite vertex `k+2` (Delaunay's convention). Pixels are assigned
   by rasterising the triangles, and border-band pixels take the facet at the
   nearest point of the rectangle. The corner count is capped at 15 k, since
   Delaunay is quadratic.
@@ -179,13 +179,13 @@ needs nothing else.
   facets in busy areas go without a hole sooner.
 
 - **Rectangles** (`rectLayout`): greedy guillotine splitting. The rectangle whose
-  best split most reduces the total squared colour error is split next; on ties (flat
+  best split most reduces the total squared color error is split next; on ties (flat
   areas), the largest goes first. Candidate splits are every work-pixel column and
   row at least `minSide` from the sides, each scored in constant time from
   summed-area tables of the encoded channels and their squares. There is no
   randomness. Each side remembers the RANK of the cut it lies on (−1 for the
-  outline). At a T-junction a side borders several neighbours, so it is broken at
-  their corners into segments, each labelled with the cell across it (tested on every
+  outline). At a T-junction a side borders several neighbors, so it is broken at
+  their corners into segments, each labeled with the cell across it (tested on every
   edge, both ways). The work raster has a floor of 4 px/mm (`opts.minPxPerMm`),
   because the cells are large but cut positions must be fine.
 - **Walls of different weight:** a layout may return `wallExtra(i, q, k)`, which
@@ -195,7 +195,7 @@ needs nothing else.
   plus the web/2 rim, so it comes out at `cutWidth`.
 - **Flat fill** (`P.fill === 'flat'`): each cell opens to ITS OWN web limit, not the
   shared tone band. The band is the 10th percentile over all cells, and it held large
-  rectangles back to the small ones' size (measured: mean colour error 0.07 against
+  rectangles back to the small ones' size (measured: mean color error 0.07 against
   the full-strength target, now 0). Nothing is left to diffuse, and the "at the
   largest hole" warning is not raised. Voronoi and Facets have no `fill` parameter,
   so their output is unchanged, and all their tests reproduce.
@@ -204,7 +204,7 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
 
 ## Stipple
 
-- **Fixed-size circles with centres at least `sMin = widest hole + web` apart.**
+- **Fixed-size circles with centers at least `sMin = widest hole + web` apart.**
   This is the general rule again. The spacing is *enforced* after relaxation: pairs
   too close are pushed apart, and whatever still clashes is removed greedily. The
   note says how many.
@@ -213,10 +213,10 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
   weighted Lloyd with weight ρ² relaxes them (Lloyd settles at weight^½).
 - **The densest tone is 0.7 of hexagonal packing (`PACKING`), measured.** Above it,
   the repair removes dots in the lights: 0.8 lost 172 of about 560 on white.
-- **The frame is metal in the target.** No centre can sit within `web + dDeep/2` of
+- **The frame is metal in the target.** No center can sit within `web + dDeep/2` of
   the outline, so asking for dots there packed them into the interior. That alone
   cost 116 dots on white at 0.7 before it was fixed.
-- **Colour is by dot, not by nesting.** Each dot shows one sheet, chosen by 1-D error
+- **Color is by dot, not by nesting.** Each dot shows one sheet, chosen by 1-D error
   diffusion along the Hilbert order of the dots. Deeper holes are wider and hidden, as
   in the Voronoi web's solid mode.
 - **Tone is scored per window about four dots across,** because a single dot says
@@ -244,12 +244,12 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
   apart (opposite for the horizontal and vertical styles). If the chosen style has
   no path, the app falls back to any angle and says so in the note. Clusters still
   not joined to the frame get one more bridge per pass.
-- **Colour layering reuses the hidden-registration rule.** A deeper sheet's cut is
+- **Color layering reuses the hidden-registration rule.** A deeper sheet's cut is
   extended by `j·reg`, but only into areas where a sheet above it is solid. Extending
-  it into its own visible region would move the colour boundary.
+  it into its own visible region would move the color boundary.
 - **Halftone inside shapes:** a grid of circles, each capped to stay inside its
   shape. The cap subtracts 1.25 px, because the distance is measured between pixel
-  centres; without that, holes poked out of their shape by up to a pixel (caught by
+  centers; without that, holes poked out of their shape by up to a pixel (caught by
   the harness).
 
 ## Screen
@@ -295,8 +295,8 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
 - **Ties** close `tieWidth / spacing` of every slot, so slots are widened by that
   much to pay it back, within the band. **Bridges are not paid back:** untied rings
   are islands held by two bridges each, which cost 4% of the tone at 10 mm radius
-  and 18% within 8 mm of the centre. So rings should be used with ties.
-- **Colour:** every sheet uses the same screen at its own cumulative open fraction,
+  and 18% within 8 mm of the center. So rings should be used with ties.
+- **Color:** every sheet uses the same screen at its own cumulative open fraction,
   so deeper slots sit inside the ones above. Each is then narrowed by the
   registration allowance per sheet.
 
@@ -319,7 +319,7 @@ clean, flattened regions; XDoG then Kuwahara softens the lines into blobs.
 
 **Blur (Gaussian)** softens each of R, G, B independently (`core/features.js`'s
 `blur`, the same one XDoG and Kuwahara use for their own internal blurs), radius
-in millimetres. No hue-preserving recombination step, unlike CLAHE and Posterize:
+in millimeters. No hue-preserving recombination step, unlike CLAHE and Posterize:
 blurring already treats every channel alike and needs none. This is what the old
 global Smoothing setting became -- see Tone, above.
 
@@ -336,18 +336,18 @@ changes smoothly and tile edges do not show as seams. Applied to luminance only,
 recombined into the pixel keeping its hue -- the same technique, and the same
 reason, as Posterize's output.
 
-**Posterize** reduces the image to a real palette of N colours, not a tone-band
+**Posterize** reduces the image to a real palette of N colors, not a tone-band
 trick. K-means clusters a sample of the pixels in OKLab (a perceptual space: equal
 steps look equally different to the eye, unlike linear light or encoded sRGB) --
 the same clustering `separate.js`'s palette suggester runs for the Sheets tab,
 minus its push away from the mean, since that push is for extra nested-hole gamut
-and Posterize wants the image's actual dominant colours. Every pixel then takes
-its nearest palette colour, a hard partition into N regions. Because N arbitrary
-colours have no natural order (unlike tone bands, where band j+1 is always inside
-band j), the "shape simplification" cleans up each colour's region on its own --
+and Posterize wants the image's actual dominant colors. Every pixel then takes
+its nearest palette color, a hard partition into N regions. Because N arbitrary
+colors have no natural order (unlike tone bands, where band j+1 is always inside
+band j), the "shape simplification" cleans up each color's region on its own --
 an opening then a closing at the cleanup radius, removing small islands and filling
 small notches -- and resolves any pixel a cleanup leaves claimed by none or several
-colours to whichever cleaned region is nearest, by the same exact distance
+colors to whichever cleaned region is nearest, by the same exact distance
 transform (`core/edt.js`) the stencil's own cleanup uses.
 
 **Anisotropic Kuwahara** (`core/kuwahara.js`): an ellipse along the structure-tensor
@@ -385,7 +385,7 @@ and not a filter.
 - *Uniform* is an equilateral lattice.
 - Both add the corners and a border ring, so the facets tile the piece (checked to
   1e-6).
-- Average colour is taken in linear light, which keeps tone to 0.1%. Median works
+- Average color is taken in linear light, which keeps tone to 0.1%. Median works
   per channel, through one reused histogram, since one per facet would be hundreds
   of MB at the point cap.
 - The triangulation is quadratic, fine at the 1–10 k points this uses (0.7 s for a
@@ -400,12 +400,12 @@ drawn explicitly: an option on this filter, or a cutting method.
 
 `core/svg.js` and `core/dxf.js` write the same hole model: holes first,
 innermost first, then the outline, all shifted by kerf/2 so the outline's cut path
-starts at the origin. Names come from `core/names.js`, using the colours the result
-was made with (`piece.colours`, from the pipeline).
+starts at the origin. Names come from `core/names.js`, using the colors the result
+was made with (`piece.colors`, from the pipeline).
 
 The DXF has two traps. Its **y axis runs up**, so y becomes `height - y`; written
 as-is, every piece would be mirrored. And the flip **reverses every arc**, so each
-bulge sign is computed from the arc's own start, end and centre after the flip,
+bulge sign is computed from the arc's own start, end and center after the flip,
 never from a rule about which way the path turns. `tests/core.dxf.js` reads files
 back and checks both: an L keeps its foot at the bottom, and rounded squares
 rebuilt from vertices and bulges have their exact cut-path area (a reversed bulge
@@ -433,5 +433,5 @@ would be about 20% off).
   Seed control where it shows. Nothing calls `Math.random`, and the harness checks
   that two runs are identical and that another seed differs.
 - **Stacking order is a design choice, not a sort.** The base shows only through every
-  hole, so it gets the least area. The suggester puts the most-used colour on top, but a
+  hole, so it gets the least area. The suggester puts the most-used color on top, but a
   user with a black base in mind should reorder the sheets. The app allows it.

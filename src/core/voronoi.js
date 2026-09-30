@@ -3,7 +3,7 @@
 // Each cell starts as the clip rectangle and is cut by the perpendicular bisector
 // towards each nearby seed. That is slower than Fortune's sweep or a Delaunay
 // dual, but it is short, exact for this purpose, labels every edge with the
-// neighbour across it for free, and has no degenerate cases to get wrong beyond
+// neighbor across it for free, and has no degenerate cases to get wrong beyond
 // coincident seeds (skipped: the placer never makes them).
 //
 // Nearby seeds come from a bucket grid, visited in square rings. A seed in ring
@@ -80,7 +80,7 @@ export class SeedHash {
  * @param {[number,number,number,number]} rect  x0, y0, x1, y1
  * @param {SeedHash} hash  over the same seeds
  * @returns {Array<{xs:number[], ys:number[], lab:number[]}|null>}
- *   cell i, edges labelled with the neighbouring seed or -1 on the rectangle
+ *   cell i, edges labeled with the neighboring seed or -1 on the rectangle
  */
 export function voronoiCells(xs, ys, rect, hash) {
   const cells = new Array(xs.length);

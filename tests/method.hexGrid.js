@@ -5,7 +5,7 @@
 // code to lean on), so the flood fill here is the primary safety net, not a
 // formality: it is what actually catches a margin or spacing mistake.
 
-import { check, section, num, greyRamp, flatGrey, noiseRGBA, plain } from './runner.js';
+import { check, section, num, grayRamp, flatGray, noiseRGBA, plain } from './runner.js';
 import { pieceCount } from '../src/core/structure.js';
 import method from '../src/methods/hexGrid.js';
 
@@ -20,7 +20,7 @@ export function run() {
 
   // ---- one piece, both hole shapes, several images
   {
-    const images = { white: flatGrey(200, 200, 255), ramp: greyRamp(200, 200), noise: noiseRGBA(200, 200, 11, false) };
+    const images = { white: flatGray(200, 200, 255), ramp: grayRamp(200, 200), noise: noiseRGBA(200, 200, 11, false) };
     const failures = [];
     let runs = 0;
     for (const [name, rgba] of Object.entries(images)) {
@@ -61,7 +61,7 @@ export function run() {
   // -- the hexagon fills more of its cell, so a bright flat image (unconstrained
   // by anything but the cell itself) should read brighter with hexagon holes.
   {
-    const white = flatGrey(4, 4, 255);
+    const white = flatGray(4, 4, 255);
     const { b: hex } = build(white, { widthMm: 60, web: 0.4 }, { pitch: 4, shape: 'hex' });
     const { b: circ } = build(white, { widthMm: 60, web: 0.4 }, { pitch: 4, shape: 'circle' });
     check('hexagon holes reach a higher open fraction than circles at the same pitch',
@@ -69,11 +69,11 @@ export function run() {
       `white achieves ${num(hex.achieved[0], 4)} (hex) vs ${num(circ.achieved[0], 4)} (circle)`);
   }
 
-  // ---- both hole shapes, stacked colour: every layer produces holes, nested
+  // ---- both hole shapes, stacked color: every layer produces holes, nested
   for (const shape of ['hex', 'circle']) {
     const settings = { mode: 'color', palette: ['#f0f0f0', '#e0b000', '#101010'], widthMm: 80, minHole: 0.4, kerf: 0.1, reg: 0.25, web: 0.5 };
     const { b } = build(noiseRGBA(180, 180, 3), settings, { pitch: 3.5, shape });
-    check(`${shape}: colour build produces holes on every cut layer`,
+    check(`${shape}: color build produces holes on every cut layer`,
       b.layers.length === 2 && b.layers.every((l) => l.length > 0),
       `${b.layers.map((l) => l.length).join(', ')} holes per layer`);
   }

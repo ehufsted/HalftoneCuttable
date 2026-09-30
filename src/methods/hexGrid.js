@@ -4,10 +4,10 @@
 //
 // TILING. Flat-top hexagons of circumradius R = pitch/2: columns dx = 1.5R apart,
 // rows dy = R*sqrt(3) apart, odd columns offset down by dy/2 -- the standard
-// offset-coordinate hex lattice. Every cell has exactly 6 neighbours, each at the
+// offset-coordinate hex lattice. Every cell has exactly 6 neighbors, each at the
 // SAME distance pitch*sqrt(3)/2 (true of any regular hex tiling), and that
 // distance lies exactly along one of the cell's own six edge normals -- so a
-// hexagon hole's (or a circle's) extent toward ANY neighbour is simply its own
+// hexagon hole's (or a circle's) extent toward ANY neighbor is simply its own
 // flat-to-flat width, with no per-direction case to work out.
 //
 // ONE PIECE BY CONSTRUCTION: the general rule (docs/architecture.md's "Self-
@@ -30,12 +30,12 @@
 // TONE. Per cell, in the same greedy layer-by-layer, error-diffused way as
 // squareGrid (see its header): solve the target mix, cap each layer by the one
 // above it less the registration allowance, and hand what a cell could not match
-// to its neighbours. Diffusion runs over the hex GRAPH (core/diffuse.js's
+// to its neighbors. Diffusion runs over the hex GRAPH (core/diffuse.js's
 // diffuseGraph), not the raster diffuseCells, because a hex cell has six
-// neighbours, not four.
+// neighbors, not four.
 
 import { diffuseGraph } from '../core/diffuse.js';
-import { solveMix, cumulativeOpen, visibleMix, mixColour, fitMix } from '../core/separate.js';
+import { solveMix, cumulativeOpen, visibleMix, mixColor, fitMix } from '../core/separate.js';
 import { finished, cutPath, areaOf } from '../core/shapes.js';
 import { prepareRaster, linearPlanes } from '../core/units.js';
 import { luminance } from '../core/color.js';
@@ -106,7 +106,7 @@ function floorSize(shape, hMin, kerf) {
   return Math.max(hMin, kerfFloor);
 }
 
-/** The 6 flat-top hexagon vertices of circumradius R, centred at (cx, cy).
+/** The 6 flat-top hexagon vertices of circumradius R, centered at (cx, cy).
  *  Increasing angle here is clockwise on screen (y runs down), which is the
  *  positive-shoelace-area winding core/polygon.js's convex-polygon tools need. */
 function hexVertices(cx, cy, R) {
@@ -119,10 +119,10 @@ function hexVertices(cx, cy, R) {
   return { xs, ys };
 }
 
-/** Cell (col, row)'s up-to-6 neighbours, as flat cell indices. Odd columns are
- *  offset down by half a row, which is why the diagonal neighbours differ by
- *  column parity (the standard offset-coordinate hex-neighbour table). */
-function hexNeighbours(col, row, cols, rows) {
+/** Cell (col, row)'s up-to-6 neighbors, as flat cell indices. Odd columns are
+ *  offset down by half a row, which is why the diagonal neighbors differ by
+ *  column parity (the standard offset-coordinate hex-neighbor table). */
+function hexNeighbors(col, row, cols, rows) {
   const cand = [[col, row - 1], [col, row + 1]];
   if (col & 1) cand.push([col - 1, row], [col - 1, row + 1], [col + 1, row], [col + 1, row + 1]);
   else cand.push([col - 1, row - 1], [col - 1, row], [col + 1, row - 1], [col + 1, row]);
@@ -132,9 +132,9 @@ function hexNeighbours(col, row, cols, rows) {
 }
 
 /**
- * Which cell (x, y) falls in: the nearest cell centre, checked over the 3x3
+ * Which cell (x, y) falls in: the nearest cell center, checked over the 3x3
  * block of column/row candidates around the naive rounded guess -- generous
- * enough to always include the true nearest centre on an evenly spaced lattice.
+ * enough to always include the true nearest center on an evenly spaced lattice.
  * @returns {number} cell index, or -1 outside the grid
  */
 function hexCellAt(x, y, marginX, marginY, dx, dy, R, cellInradius, cols, rows) {
@@ -159,7 +159,7 @@ function hexCellAt(x, y, marginX, marginY, dx, dy, R, cellInradius, cols, rows) 
 
 /**
  * The thinnest metal one cut layer leaves, in mm: between every pair of
- * neighbouring holed cells, and from an edge cell to the outline. Diagonal (non-
+ * neighboring holed cells, and from an edge cell to the outline. Diagonal (non-
  * adjacent) cells need no check, the same reasoning squareGrid's thinnestWeb
  * gives for its own grid. Infinity if no holes.
  */
@@ -170,7 +170,7 @@ function hexThinnestWeb(sizes, cols, rows, pitch, cellXY, W, H) {
     for (let col = 0; col < cols; col++) {
       const c = row * cols + col, sC = sizes[c];
       if (!(sC > 0)) continue;
-      for (const q of hexNeighbours(col, row, cols, rows)) {
+      for (const q of hexNeighbors(col, row, cols, rows)) {
         const sQ = sizes[q];
         if (sQ > 0) min = Math.min(min, nbrDist - (sC + sQ) / 2);
       }
@@ -181,13 +181,13 @@ function hexThinnestWeb(sizes, cols, rows, pitch, cellXY, W, H) {
   return min;
 }
 
-/** Each cell's achieved colour, from the final sizes of every cut layer. */
+/** Each cell's achieved color, from the final sizes of every cut layer. */
 function stackHex(shape, sizesArr, palette, cellArea, kd, N, D) {
   const out = new Float64Array(N * D);
   const f = new Float64Array(sizesArr.length), vis = new Float64Array(sizesArr.length + 1), col = new Float64Array(D);
   for (let c = 0; c < N; c++) {
     for (let j = 0; j < sizesArr.length; j++) f[j] = openFraction(shape, sizesArr[j][c], cellArea, kd);
-    mixColour(visibleMix(f, vis), palette, col);
+    mixColor(visibleMix(f, vis), palette, col);
     for (let d = 0; d < D; d++) out[c * D + d] = col[d];
   }
   return out;
@@ -215,7 +215,7 @@ export function targetImage(ctx) {
     for (let d = 0; d < D; d++) x[d] = ctx.target[i * D + d];
     solveMix(x, palette, m);
     fitMix(m, fMax, ctx.range);
-    mixColour(m, palette, c);
+    mixColor(m, palette, c);
     for (let d = 0; d < D; d++) out[i * D + d] = c[d];
   }
   return out;
@@ -255,7 +255,7 @@ export function run(ctx) {
       prev = s;
     }
     visibleMix(got, vis);
-    mixColour(vis, palette, out);
+    mixColor(vis, palette, out);
   }, ctx.diffuse !== false);
 
   let note = '';
@@ -287,7 +287,7 @@ export function build(rgba, settings, params = {}) {
   const cellXY = (col, row) => [marginX + R + col * dx, marginY + cellInradius + row * dy + (col & 1) * (dy / 2)];
   const cellAt = (x, y) => hexCellAt(x, y, marginX, marginY, dx, dy, R, cellInradius, cols, rows);
 
-  // ---- diffusion order (serpentine by row) and the neighbour graph
+  // ---- diffusion order (serpentine by row) and the neighbor graph
   const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => {
     const ra = Math.floor(a / cols), rb = Math.floor(b / cols);
     if (ra !== rb) return ra - rb;
@@ -296,10 +296,10 @@ export function build(rgba, settings, params = {}) {
   });
   const nbrs = Array.from({ length: N }, (_, i) => {
     const col = i % cols, row = (i - col) / cols;
-    return hexNeighbours(col, row, cols, rows).map((q) => [q, 1]);
+    return hexNeighbors(col, row, cols, rows).map((q) => [q, 1]);
   });
 
-  // ---- the work raster, and each cell's mean colour (as cellWeb.js samples its
+  // ---- the work raster, and each cell's mean color (as cellWeb.js samples its
   // own cells: resize to a fine raster, then average the pixels that land in
   // each cell -- the hex lattice's own point-location, not a generic one)
   const px = Math.min(6 / pitch, Math.sqrt(WORK_PIXELS / (W * H)));
@@ -323,7 +323,7 @@ export function build(rgba, settings, params = {}) {
     }
   }
   for (let c = 0; c < N; c++) {
-    if (cnt[c] === 0) {           // a sliver no pixel centre fell in: use the pixel under the cell's own centre
+    if (cnt[c] === 0) {           // a sliver no pixel center fell in: use the pixel under the cell's own center
       const col = c % cols, row = (c - col) / cols;
       const [cx, cy] = cellXY(col, row);
       const i = Math.min(ww - 1, Math.max(0, Math.floor(cx * kx))), j = Math.min(wh - 1, Math.max(0, Math.floor(cy * ky)));

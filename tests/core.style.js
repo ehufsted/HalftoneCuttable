@@ -4,14 +4,14 @@
 //  - "None" hands the method the very same pixels: nothing downstream can change.
 //  - A step edge draws ONE line, on its dark side, next to the edge; far from the
 //    edge both sides stay paper (both are above the fill level).
-//  - The line's width follows the Line scale, and is the same in millimetres on a
+//  - The line's width follows the Line scale, and is the same in millimeters on a
 //    bigger piece (σ is set in mm).
 //  - Flat areas below the fill level fill with ink; above it they stay paper.
 //  - Following the edges joins a noisy edge's line into fewer pieces.
-//  - "Lines over image" leaves colour alone away from the lines.
+//  - "Lines over image" leaves color alone away from the lines.
 //  - Lines only, through the stencil, cuts a line drawing that is one piece.
 
-import { check, section, num, makeRGBA, flatGrey, mkRand, plain, say } from './runner.js';
+import { check, section, num, makeRGBA, flatGray, mkRand, plain, say } from './runner.js';
 import { applyStyle } from '../src/core/style.js';
 import { lowPolyMesh } from '../src/core/lowpoly.js';
 import { LINEAR_LUT } from '../src/core/color.js';
@@ -41,7 +41,7 @@ function inkRun(img, row = H / 2) {
 }
 
 export function run() {
-  section('core.style', 'XDoG: identity at None, the line on a step edge, its width in mm, fill level, following edges, overlay, a cut drawing. Kuwahara: grain vs edges, flat colour, anisotropy. The chain: order, old settings. Low-poly: tiling, tone, median, adaptive, edges, uniform. Blur: flat colour unchanged, edge softens with radius, radius 0 is identity. CLAHE: local not global, contrast limit, hue kept. Posterize: recovers the palette, deterministic, cleanup absorbs a fleck.');
+  section('core.style', 'XDoG: identity at None, the line on a step edge, its width in mm, fill level, following edges, overlay, a cut drawing. Kuwahara: grain vs edges, flat color, anisotropy. The chain: order, old settings. Low-poly: tiling, tone, median, adaptive, edges, uniform. Blur: flat color unchanged, edge softens with radius, radius 0 is identity. CLAHE: local not global, contrast limit, hue kept. Posterize: recovers the palette, deterministic, cleanup absorbs a fleck.');
 
   {
     const img = step();
@@ -59,7 +59,7 @@ export function run() {
       run ? `ink from ${num(run[0] / px, 2)} to ${num((run[1] + 1) / px, 2)} mm, the edge at 40 mm` : 'no ink');
   }
 
-  // ---- width follows the scale, in millimetres
+  // ---- width follows the scale, in millimeters
   {
     const width = (scale, widthMm) => {
       const out = applyStyle(step(), xd({ scale }), widthMm);
@@ -75,10 +75,10 @@ export function run() {
 
   // ---- the fill level
   {
-    const dark = applyStyle(flatGrey(60, 60, 50), xd(), 30), light = applyStyle(flatGrey(60, 60, 160), xd(), 30);
+    const dark = applyStyle(flatGray(60, 60, 50), xd(), 30), light = applyStyle(flatGray(60, 60, 160), xd(), 30);
     check('flat areas below the fill level fill with ink, above it stay paper',
       dark.data[4 * 1830] < 10 && light.data[4 * 1830] > 245,
-      `grey 50 → ${dark.data[4 * 1830]}, grey 160 → ${light.data[4 * 1830]} (fill level 0.3)`);
+      `gray 50 → ${dark.data[4 * 1830]}, gray 160 → ${light.data[4 * 1830]} (fill level 0.3)`);
   }
 
   // ---- following edges joins a noisy line. Counted in the band round the edge:
@@ -99,13 +99,13 @@ export function run() {
       `${off} ink fragments along the edge without, ${on} with`);
   }
 
-  // ---- overlay keeps colour
+  // ---- overlay keeps color
   {
     const img = makeRGBA(W, H, (x) => (x < W / 2 ? [60, 60, 200] : [220, 90, 60]));
     const out = applyStyle(img, xd({ output: 'over', threshold: 0 }), 80);
     const same = [10, 100, 300, 390].every((x) => { const q = 4 * ((H / 2) * W + x); return out.data[q] === img.data[q] && out.data[q + 1] === img.data[q + 1] && out.data[q + 2] === img.data[q + 2]; });
     const q = 4 * ((H / 2) * W + inkRun(applyStyle(img, xd({ threshold: 0 }), 80))[0]);
-    check('lines over image: colour untouched away from the lines, darkened on them', same && out.data[q] < img.data[q] / 2,
+    check('lines over image: color untouched away from the lines, darkened on them', same && out.data[q] < img.data[q] / 2,
       `on the line: ${out.data[q]},${out.data[q + 1]},${out.data[q + 2]}`);
   }
 
@@ -122,7 +122,7 @@ export function run() {
 
   // ================= Blur (Gaussian) =================
 
-  // ---- a flat colour passes through unchanged
+  // ---- a flat color passes through unchanged
   {
     const flat = makeRGBA(40, 40, () => [180, 70, 40]);
     const out = applyStyle(flat, { chain: [{ id: 'blur', radius: 3 }] }, 20);
@@ -130,7 +130,7 @@ export function run() {
     for (let i = 0; i < out.data.length; i += 4) {
       worst = Math.max(worst, Math.abs(out.data[i] - 180), Math.abs(out.data[i + 1] - 70), Math.abs(out.data[i + 2] - 40));
     }
-    check('blur: a flat colour comes through unchanged', worst <= 1, `worst channel change ${worst}/255`);
+    check('blur: a flat color comes through unchanged', worst <= 1, `worst channel change ${worst}/255`);
   }
 
   // ---- softens a step edge, and further with a larger radius (5 px/mm at 80 mm)
@@ -150,7 +150,7 @@ export function run() {
 
   // ---- radius 0 changes nothing (the same object, like an empty chain)
   {
-    const img = flatGrey(20, 20, 128);
+    const img = flatGray(20, 20, 128);
     check('blur: radius 0 is an identity', applyStyle(img, { chain: [{ id: 'blur', radius: 0 }] }, 20) === img);
   }
 
@@ -213,7 +213,7 @@ export function run() {
 
   // ================= Posterize =================
 
-  // ---- a 3-colour image recovers all 3 colours, and nothing else
+  // ---- a 3-color image recovers all 3 colors, and nothing else
   {
     const W2 = 90, H2 = 30;
     const cols = [[220, 40, 40], [40, 180, 60], [40, 60, 220]];
@@ -221,11 +221,11 @@ export function run() {
     const out = applyStyle(img, { chain: [{ id: 'posterize', levels: 3, cleanup: 0, seed: 1 }] }, 45);
     const vals = new Set();
     for (let i = 0; i < out.data.length; i += 4) vals.add(`${out.data[i]},${out.data[i + 1]},${out.data[i + 2]}`);
-    const centres = [15, 45, 75].map((x) => { const q = 4 * ((H2 / 2) * W2 + x); return [out.data[q], out.data[q + 1], out.data[q + 2]]; });
+    const centers = [15, 45, 75].map((x) => { const q = 4 * ((H2 / 2) * W2 + x); return [out.data[q], out.data[q + 1], out.data[q + 2]]; });
     const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 15;
-    const matched = cols.every((c) => centres.some((o) => near(c, o)));
-    check('posterize: a 3-colour image recovers exactly those 3 colours', vals.size === 3 && matched,
-      `${vals.size} distinct colours; recovered ${centres.map((c) => c.join('/')).join(' ')}`);
+    const matched = cols.every((c) => centers.some((o) => near(c, o)));
+    check('posterize: a 3-color image recovers exactly those 3 colors', vals.size === 3 && matched,
+      `${vals.size} distinct colors; recovered ${centers.map((c) => c.join('/')).join(' ')}`);
   }
 
   // ---- deterministic for a given seed
@@ -252,7 +252,7 @@ export function run() {
     const noCleanup = applyStyle(img, { chain: [{ id: 'posterize', levels: 2, cleanup: 0, seed: 1 }] }, 30);
     check('posterize: shape cleanup absorbs a small fleck into its surroundings',
       diff(mid, bgPix, withCleanup) < 10 && diff(mid, bgPix, noCleanup) > 100,
-      `colour difference, fleck vs background: ${diff(mid, bgPix, withCleanup)} with cleanup, ` +
+      `color difference, fleck vs background: ${diff(mid, bgPix, withCleanup)} with cleanup, ` +
       `${diff(mid, bgPix, noCleanup)} without`);
   }
 
@@ -278,13 +278,13 @@ export function run() {
       `grain ${num(before, 1)} → ${num(after, 1)} (×${num(before / after, 1)} smoother); edge rises 10–90% over ${num(rise, 2)} mm with a 2 mm brush`);
   }
 
-  // ---- flat colour passes through
+  // ---- flat color passes through
   {
     const flat = makeRGBA(80, 60, () => [180, 70, 40]);
     const out = applyStyle(flat, { chain: [{ id: 'kuwahara', size: 3 }] }, 20);
     let worst = 0;
     for (let i = 0; i < out.data.length; i += 4) worst = Math.max(worst, Math.abs(out.data[i] - 180), Math.abs(out.data[i + 1] - 70), Math.abs(out.data[i + 2] - 40));
-    check('kuwahara: a flat colour comes through unchanged', worst <= 1, `worst channel change ${worst}/255`);
+    check('kuwahara: a flat color comes through unchanged', worst <= 1, `worst channel change ${worst}/255`);
   }
 
   // ---- anisotropy stretches the patches along the image's direction
@@ -339,47 +339,47 @@ export function run() {
 
   // ================= Low-poly =================
   {
-    const lp = (o) => ({ layout: 'adaptive', size: 8, detail: 0.5, edges: true, edgeThreshold: 0.3, colour: 'average', seed: 1, ...o });
+    const lp = (o) => ({ layout: 'adaptive', size: 8, detail: 0.5, edges: true, edgeThreshold: 0.3, color: 'average', seed: 1, ...o });
     const area = (xs, ys, tris, t) => {
       const a = tris[3 * t], b = tris[3 * t + 1], c = tris[3 * t + 2];
       return Math.abs((xs[b] - xs[a]) * (ys[c] - ys[a]) - (ys[b] - ys[a]) * (xs[c] - xs[a])) / 2;
     };
 
-    // flat colour, both colourings
+    // flat color, both colorings
     const flat = makeRGBA(120, 90, () => [180, 70, 40]);
     let worst = 0;
-    for (const colour of ['average', 'median']) {
-      const out = applyStyle(flat, { chain: [{ id: 'lowpoly', ...lp({ colour, size: 4 }) }] }, 60);
+    for (const color of ['average', 'median']) {
+      const out = applyStyle(flat, { chain: [{ id: 'lowpoly', ...lp({ color, size: 4 }) }] }, 60);
       for (let i = 0; i < out.data.length; i += 4) worst = Math.max(worst, Math.abs(out.data[i] - 180), Math.abs(out.data[i + 1] - 70), Math.abs(out.data[i + 2] - 40));
     }
-    check('low-poly: a flat colour comes through unchanged, averaged or median', worst <= 1, `worst channel change ${worst}/255`);
+    check('low-poly: a flat color comes through unchanged, averaged or median', worst <= 1, `worst channel change ${worst}/255`);
 
-    // facets tile the image; each is one colour; tone kept by the average
+    // facets tile the image; each is one color; tone kept by the average
     const R = 300;
     const radial = makeRGBA(R, R, (x, y) => { const v = Math.round(255 * Math.max(0, 1 - Math.hypot(x - 150, y - 150) / 170)); return [v, v, v]; });
     const mesh = lowPolyMesh(radial, lp({ size: 5 }), 60);
     let tot = 0;
     for (let t = 0; t < mesh.n; t++) tot += area(mesh.xs, mesh.ys, mesh.tris, t);
     const out = applyStyle(radial, { chain: [{ id: 'lowpoly', ...lp({ size: 5 }) }] }, 60);
-    const colours = new Set();
+    const colors = new Set();
     let lin0 = 0, lin1 = 0;
-    for (let i = 0; i < R * R; i++) { colours.add(out.data[4 * i]); lin0 += LINEAR_LUT[radial.data[4 * i]]; lin1 += LINEAR_LUT[out.data[4 * i]]; }
+    for (let i = 0; i < R * R; i++) { colors.add(out.data[4 * i]); lin0 += LINEAR_LUT[radial.data[4 * i]]; lin1 += LINEAR_LUT[out.data[4 * i]]; }
     check('low-poly: the facets tile the image exactly, and the triangulation is clean',
       Math.abs(tot - R * R) / (R * R) < 1e-6 && mesh.report.dropped === 0 && mesh.report.malformed === 0,
       `${mesh.n} facets covering ${num(100 * tot / (R * R), 4)}% of the image; dropped ${mesh.report.dropped}, malformed ${mesh.report.malformed}`);
     check('low-poly: one flat tone per facet, and the average keeps the overall tone',
-      colours.size <= mesh.n && Math.abs(lin1 - lin0) / lin0 < 0.01,
-      `${colours.size} distinct tones for ${mesh.n} facets; linear light ${num(lin1 / (R * R), 4)} vs ${num(lin0 / (R * R), 4)}`);
+      colors.size <= mesh.n && Math.abs(lin1 - lin0) / lin0 < 0.01,
+      `${colors.size} distinct tones for ${mesh.n} facets; linear light ${num(lin1 / (R * R), 4)} vs ${num(lin0 / (R * R), 4)}`);
 
     // median ignores specks
     const r = mkRand(12);
     const specks = makeRGBA(120, 90, () => (r() < 0.05 ? [255, 255, 255] : [100, 100, 100]));
-    const med = applyStyle(specks, { chain: [{ id: 'lowpoly', ...lp({ colour: 'median', size: 6 }) }] }, 60);
-    const avg = applyStyle(specks, { chain: [{ id: 'lowpoly', ...lp({ colour: 'average', size: 6 }) }] }, 60);
+    const med = applyStyle(specks, { chain: [{ id: 'lowpoly', ...lp({ color: 'median', size: 6 }) }] }, 60);
+    const avg = applyStyle(specks, { chain: [{ id: 'lowpoly', ...lp({ color: 'average', size: 6 }) }] }, 60);
     let medOk = true, avgMean = 0;
     for (let i = 0; i < med.data.length; i += 4) { if (med.data[i] !== 100) medOk = false; avgMean += avg.data[i] / (med.data.length / 4); }
     check('low-poly: the median ignores specks that pull the average up', medOk && avgMean > 105,
-      `median everywhere 100: ${medOk}; average ${num(avgMean, 1)} (5% white specks on grey 100)`);
+      `median everywhere 100: ${medOk}; average ${num(avgMean, 1)} (5% white specks on gray 100)`);
 
     // adaptive: smaller facets where the image is busy (left flat, right textured)
     const rt = mkRand(13);

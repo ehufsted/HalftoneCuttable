@@ -323,7 +323,7 @@ function pointInLoop(x, y, L) {
  * Score a hole model in windows: the per-pixel target and source averaged per
  * window, and what the sheets actually show there, from the renderer at the work
  * resolution.
- * @param {(q:number, out:Float64Array)=>void} o.tgtPix  target colour of work pixel q
+ * @param {(q:number, out:Float64Array)=>void} o.tgtPix  target color of work pixel q
  */
 export function scoreWindows(o) {
   const { W, H, ww, wh, k, ky, D, palette, kerf, src, layers, tgtPix } = o;

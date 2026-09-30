@@ -3,7 +3,7 @@
 // The app is deterministic by design: every stochastic method takes a seed and
 // nothing calls Math.random, which is what lets the verification harness use
 // "output is byte-identical" as an acceptance criterion for a change that should
-// not alter behaviour.
+// not alter behavior.
 //
 // Changing this function re-rolls every drawing. Not the tone — the statistics
 // are unaffected — but every dot position, wave direction and dither decision.

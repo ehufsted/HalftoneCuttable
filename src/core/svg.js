@@ -1,9 +1,9 @@
 // SVG writer for one sheet.
 //
-// Millimetres with a matching viewBox, so the file imports at its true size in
+// Millimeters with a matching viewBox, so the file imports at its true size in
 // LightBurn, RDWorks, Inkscape and friends. Every contour is a closed path.
 //
-// TWO STROKE COLOURS, because laser software maps colour to a cut layer and the
+// TWO STROKE COLORS, because laser software maps color to a cut layer and the
 // order matters: the holes (blue) must be cut BEFORE the outline (red), or the
 // piece drops out of the sheet, can shift, and the remaining holes land in the
 // wrong place. Assign blue to an earlier cut layer than red.

@@ -1,9 +1,9 @@
-// Settings in millimetres -> the cell grid a method works on.
+// Settings in millimeters -> the cell grid a method works on.
 //
 // THE GRID. Cells of pitch `p` tile the piece, and every hole stays inside its own
 // cell, inset by at least web/2 from each cell edge (see shapes.js: sMax = p - web).
-// Two neighbouring holes therefore always have >= web of metal between them. The
-// grid is then centred in the piece with a margin of at least web/2, so an edge
+// Two neighboring holes therefore always have >= web of metal between them. The
+// grid is then centered in the piece with a margin of at least web/2, so an edge
 // hole also has >= web to the outline. That is the whole structural argument, and
 // it holds for ANY image: the material is one connected piece by construction.
 // The harness checks it anyway, by flood fill, rather than trusting this comment.
@@ -19,15 +19,19 @@ import { toLinear, toEncoded, luminance, hexToLinear } from './color.js';
 export const DEFAULTS = {
   widthMm: 200,
   pitch: 4,         // mm, cell size
-  web: 0.8,         // mm, thinnest metal allowed between holes
-  minHole: 0.8,     // mm, smallest nominal hole worth cutting
-  kerf: 0.15,       // mm, beam width
-  reg: 0.3,         // mm, registration allowance between stacked layers
+  web: 1.0,         // mm, thinnest metal allowed between holes
+  minHole: 1.0,     // mm, smallest nominal hole worth cutting
+  kerf: 0,          // mm, beam width
+  reg: 0,           // mm, registration allowance between stacked layers
+  alignHoles: false, // corner alignment holes, cut into every exported sheet alike
+  alignDist: 8,      // mm, from each edge to a corner hole's center
+  alignDia: 3,       // mm, corner hole diameter
+  border: 0,         // mm, blank margin all round the piece -- no pattern holes in it
   gamma: 1,
   brightness: 1,    // linear-light multiplier
-  saturation: 1,    // 0 = grey, 1 = unchanged, >1 = more saturated
+  saturation: 1,    // 0 = gray, 1 = unchanged, >1 = more saturated
   mode: 'bw',       // 'bw' | 'color'
-  palette: ['#1a1a1a', '#ffffff'],  // colour mode: top sheet first, solid base last
+  palette: ['#1a1a1a', '#ffffff'],  // color mode: top sheet first, solid base last
 };
 
 /** Beyond this the worker's arrays and the SVG both get unreasonable. */
@@ -82,7 +86,7 @@ export function prepare(rgba, settings = {}) {
 
 /**
  * The raster methods' shared setup: settings merged with defaults, the piece size,
- * B&W/colour and the palette, and the size floors every raster method needs. Unlike
+ * B&W/color and the palette, and the size floors every raster method needs. Unlike
  * `prepare()` this does not build a cell grid or the target planes -- each raster
  * method resizes the source to its own work resolution.
  * @param {{width:number, height:number}} rgba
@@ -158,15 +162,15 @@ export function applyTone(rgba, gamma = 1, brightness = 1, saturation = 1) {
 
 /**
  * The TONE palette: what each visible sheet contributes, top sheet first. In B&W
- * the sheet is dark and the hole is light, whatever colours the preview paints
+ * the sheet is dark and the hole is light, whatever colors the preview paints
  * them -- the tone model is "open fraction = brightness".
  */
 export function paletteFor(settings) {
   return settings.mode !== 'color' ? [[0], [1]] : settings.palette.map(hexToLinear);
 }
 
-/** Centre of cell (i, j) in mm from the piece's top-left corner. */
-export const cellCentre = (ctx, i, j) => [
+/** Center of cell (i, j) in mm from the piece's top-left corner. */
+export const cellCenter = (ctx, i, j) => [
   ctx.margin + (i + 0.5) * ctx.pitch,
   ctx.margin + (j + 0.5) * ctx.pitch,
 ];

@@ -1,13 +1,13 @@
 // Voronoi web: tone, one piece per sheet, the web it claims, edges as clean
-// breaks and as lines, solid and mixed colour regions, determinism.
+// breaks and as lines, solid and mixed color regions, determinism.
 //
 // Tone is checked against the method's own exact areas (`achieved`, from
 // polygon.grownArea); the preview raster is checked against those areas
 // separately. Structure is checked THREE ways that do not share code: the
-// method's own web figure, polygon distances between neighbouring holes, and a
+// method's own web figure, polygon distances between neighboring holes, and a
 // flood fill of a raster of the sheet.
 
-import { check, section, num, greyRamp, noiseRGBA, makeRGBA, plain } from './runner.js';
+import { check, section, num, grayRamp, noiseRGBA, makeRGBA, plain } from './runner.js';
 import method from '../src/methods/voronoiWeb.js';
 import { pieceCount } from '../src/core/structure.js';
 import { rasterizeHoles } from '../src/core/render.js';
@@ -16,7 +16,7 @@ import { polyDistance } from '../src/core/polygon.js';
 
 const base = { ...plain, widthMm: 60, pitch: 3, web: 0.4, minHole: 0.5, kerf: 0.15 };
 
-/** Split image: left half one colour, right half another; edge at x = W/2. */
+/** Split image: left half one color, right half another; edge at x = W/2. */
 const split = (l, r) => makeRGBA(300, 200, (x) => (x < 150 ? l : r));
 
 function straddlers(b, x0, tol) {
@@ -50,11 +50,11 @@ function geometricWeb(b, j, kerf) {
 }
 
 export function run() {
-  section('method.voronoiWeb', 'Tone from exact areas; one piece, checked three ways; edges as breaks and as lines; solid and mixed colour regions.');
+  section('method.voronoiWeb', 'Tone from exact areas; one piece, checked three ways; edges as breaks and as lines; solid and mixed color regions.');
 
   // ---- tone on a ramp
   {
-    const b = method.build(greyRamp(300, 200), base, { edges: 'off' });
+    const b = method.build(grayRamp(300, 200), base, { edges: 'off' });
     let tSum = 0, gSum = 0, abs = 0;
     for (let i = 0; i < b.N; i++) {
       tSum += b.target[i]; gSum += b.achieved[i];
@@ -78,9 +78,9 @@ export function run() {
     const cases = [
       ['B&W noise, edges off', noiseRGBA(200, 150, 5, false), {}, { edges: 'off' }],
       ['B&W split, metal lines', split([110, 110, 110], [230, 230, 230]), {}, { edges: 'lines', lineWidth: 1 }],
-      ['colour noise, mixed, 4 sheets', noiseRGBA(200, 150, 6),
+      ['color noise, mixed, 4 sheets', noiseRGBA(200, 150, 6),
         { mode: 'color', palette: ['#f0f0f0', '#e0b000', '#c01020', '#101010'], reg: 0.3 }, { regions: 'mixed' }],
-      ['colour split, solid, 3 sheets, lines', split([200, 30, 30], [30, 60, 200]),
+      ['color split, solid, 3 sheets, lines', split([200, 30, 30], [30, 60, 200]),
         { mode: 'color', palette: ['#202020', '#d02020', '#2040d0'], reg: 0.3 }, { regions: 'solid', edges: 'lines' }],
     ];
     const fails = [], webFails = [];
@@ -136,7 +136,7 @@ export function run() {
       `band ${num(gb, 4)} with breaks, ${num(gl, 4)} with lines`);
   }
 
-  // ---- solid colour regions
+  // ---- solid color regions
   {
     const s = { ...base, mode: 'color', palette: ['#202020', '#d02020', '#2040d0'], reg: 0.3 };
     const b = method.build(split([200, 30, 30], [30, 60, 200]), s, { regions: 'solid', edges: 'breaks' });
@@ -152,11 +152,11 @@ export function run() {
         if (cuts[0][i] && Math.abs(margins[0][i] - margins[1][i] - s.reg) > 1e-9) notHidden++;
       }
     }
-    check('solid: each side of the colour boundary gets its own sheet', wrongSide === 0, `${wrongSide} cells on the wrong side`);
+    check('solid: each side of the color boundary gets its own sheet', wrongSide === 0, `${wrongSide} cells on the wrong side`);
     check('solid: red cells cut only the top sheet', redCut === 0, `${redCut} red cells cut through the red sheet`);
     check('solid: blue cells cut both sheets above the base, or neither', blueMismatch === 0, `${blueMismatch} of ${blueCells}`);
     check('solid: the hidden hole is exactly the registration allowance wider all round', notHidden === 0, `${notHidden} of ${blueCells}`);
-    check('solid: no cell straddles the colour boundary', straddlers(b, 30, 0.15) === 0, `${straddlers(b, 30, 0.15)} straddling`);
+    check('solid: no cell straddles the color boundary', straddlers(b, 30, 0.15) === 0, `${straddlers(b, 30, 0.15)} straddling`);
     let worst = 0, wi = 0;
     for (let k = 0; k < b.N * 3; k++) {
       const e = Math.abs(b.achieved[k] - b.target[k]);
@@ -164,10 +164,10 @@ export function run() {
     }
     const wc = `cell at (${num(seeds.xs[wi], 1)}, ${num(seeds.ys[wi], 1)}), sheet ${labels[wi] + 1}, ${cuts[0][wi] ? 'holed' : 'no hole'}`;
     const mean = Array.from(b.achieved).reduce((a, v, k) => a + Math.abs(v - b.target[k]), 0) / (b.N * 3);
-    check('solid: cells hit their colour', mean < 0.01, `mean |Δ| ${num(mean, 4)}, worst ${num(worst, 3)} (linear) at the ${wc}`);
+    check('solid: cells hit their color', mean < 0.01, `mean |Δ| ${num(mean, 4)}, worst ${num(worst, 3)} (linear) at the ${wc}`);
   }
 
-  // ---- mixed colour regions nest smaller, by the registration allowance
+  // ---- mixed color regions nest smaller, by the registration allowance
   {
     const s = { ...base, mode: 'color', palette: ['#f0f0f0', '#c01020', '#101010'], reg: 0.3 };
     const b = method.build(noiseRGBA(200, 150, 8), s, { regions: 'mixed' });

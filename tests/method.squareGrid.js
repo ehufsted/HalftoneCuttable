@@ -5,10 +5,10 @@
 // The raster instrument (render.measureCells, what the app's fidelity score uses)
 // is checked separately, against the same analytic numbers.
 
-import { check, section, num, greyRamp, flatGrey, noiseRGBA, plain } from './runner.js';
+import { check, section, num, grayRamp, flatGray, noiseRGBA, plain } from './runner.js';
 import { prepare } from '../src/core/units.js';
-import { stackColours } from '../src/core/separate.js';
-import { holeTables, measureCells, cellColours } from '../src/core/render.js';
+import { stackColors } from '../src/core/separate.js';
+import { holeTables, measureCells, cellColors } from '../src/core/render.js';
 import { toEncoded } from '../src/core/color.js';
 import method from '../src/methods/squareGrid.js';
 
@@ -28,8 +28,8 @@ export function run() {
 
   // ---- B&W ramp, no floor: every cell can be exact, so columns must track.
   {
-    const { ctx, res, lim, target } = setup(greyRamp(380, 120), {});
-    const got = stackColours(ctx, res.sizes, lim.spec);
+    const { ctx, res, lim, target } = setup(grayRamp(380, 120), {});
+    const got = stackColors(ctx, res.sizes, lim.spec);
     let worst = 0;
     for (let i = 0; i < ctx.cols; i++) {
       let t = 0, g = 0;
@@ -38,15 +38,15 @@ export function run() {
     }
     check('B&W ramp: every column averages to its target', worst < 1e-3, `worst |Δ| ${num(worst, 5)} (linear), ${ctx.cols}×${ctx.rows} cells`);
 
-    const white = setup(flatGrey(40, 40, 255), {}).target;
-    const black = setup(flatGrey(40, 40, 0), {}).target;
+    const white = setup(flatGray(40, 40, 255), {}).target;
+    const black = setup(flatGray(40, 40, 0), {}).target;
     const top = Math.min(...white), bottom = Math.max(...black);
     check('B&W squeeze: white maps to fMax, black to 0',
       Math.abs(top - lim.fMax) < 1e-6 && bottom < 1e-9,
       `white → ${num(top, 5)}, black → ${num(bottom, 5)}, fMax ${num(lim.fMax, 5)}`);
 
     const fr = measureCells(ctx, holeTables(ctx, res.sizes, lim.spec));
-    const meas = cellColours(ctx, fr, ctx.palette);
+    const meas = cellColors(ctx, fr, ctx.palette);
     let mean = 0;
     for (let c = 0; c < meas.length; c++) mean += Math.abs(meas[c] - got[c]) / meas.length;
     check('raster instrument (16×16 per cell) agrees with the analytic areas', mean < 0.012, `mean |Δ| ${num(mean, 4)}`);
@@ -54,29 +54,29 @@ export function run() {
 
   // ---- The dither gap: a flat tone whose hole would be below the floor.
   {
-    const probe = setup(flatGrey(4, 4, 128), { widthMm: 150, minHole: 1.2 });
+    const probe = setup(flatGray(4, 4, 128), { widthMm: 150, minHole: 1.2 });
     const want = 0.4 * probe.lim.fFloor;                      // well inside the gap
     const v = Math.round(255 * toEncoded(want / probe.lim.fMax));
-    const { ctx, res, lim, target } = setup(flatGrey(300, 300, v), { widthMm: 150, minHole: 1.2 });
+    const { ctx, res, lim, target } = setup(flatGray(300, 300, v), { widthMm: 150, minHole: 1.2 });
     const sz = res.sizes[0];
     let illegal = 0, holes = 0;
     for (const s of sz) {
       if (s > 0) holes++;
       if (s > 0 && s < lim.sFloor - F32) illegal++;
     }
-    const got = stackColours(ctx, res.sizes, lim.spec);
+    const got = stackColors(ctx, res.sizes, lim.spec);
     const tMean = target.reduce((a, b) => a + b, 0) / target.length;
     const gMean = got.reduce((a, b) => a + b, 0) / got.length;
     check('dither gap: no hole below the floor size', illegal === 0, `${illegal} illegal of ${holes} holes, floor ${num(lim.sFloor, 2)} mm`);
     check('dither gap: the mean tone survives (within 5%)', Math.abs(gMean - tMean) / tMean < 0.05,
       `target ${num(tMean, 4)}, got ${num(gMean, 4)} with ${Math.round((100 * holes) / sz.length)}% of cells holed`);
 
-    const off = setup(flatGrey(300, 300, v), { widthMm: 150, minHole: 1.2 }, { diffuse: false });
+    const off = setup(flatGray(300, 300, v), { widthMm: 150, minHole: 1.2 }, { diffuse: false });
     const uniq = new Set(off.res.sizes[0]);
     check('diffusion off: a flat tone gives one hole size everywhere', uniq.size === 1, `${uniq.size} distinct sizes`);
   }
 
-  // ---- Stack invariants on colour noise, with every limit switched on.
+  // ---- Stack invariants on color noise, with every limit switched on.
   {
     const settings = { mode: 'color', palette: ['#f0f0f0', '#e0b000', '#c01020', '#101010'],
       widthMm: 90, minHole: 0.5, kerf: 0.1, reg: 0.3 };
@@ -97,14 +97,14 @@ export function run() {
     check('stack: no hole above sMax or below the floor', over + under === 0, `${over} over, ${under} under`);
   }
 
-  // ---- Colour fidelity where nothing constrains the stack: exact.
+  // ---- Color fidelity where nothing constrains the stack: exact.
   {
     const settings = { mode: 'color', palette: ['#e8e0c0', '#3060c0', '#200810'] };
     const { ctx, res, lim, target } = setup(noiseRGBA(200, 200, 5), settings);
-    const got = stackColours(ctx, res.sizes, lim.spec);
+    const got = stackColors(ctx, res.sizes, lim.spec);
     let worst = 0;
     for (let c = 0; c < got.length; c++) worst = Math.max(worst, Math.abs(got[c] - target[c]));
-    check('colour, no floor/kerf/registration: every cell hits its target', worst < 1e-4, `worst |Δ| ${worst.toExponential(2)}`);
+    check('color, no floor/kerf/registration: every cell hits its target', worst < 1e-4, `worst |Δ| ${worst.toExponential(2)}`);
   }
 
   // ---- Determinism.

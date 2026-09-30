@@ -2,7 +2,7 @@
 // software imports most reliably.
 //
 // Same content as svg.js: every hole's cut path (already offset for the kerf)
-// on layer HOLES (colour 5, blue), the outline on layer OUTLINE (colour 1, red),
+// on layer HOLES (color 5, blue), the outline on layer OUTLINE (color 1, red),
 // holes first, innermost first, so "cut blue before red" works the same way.
 //
 //   circles          CIRCLE entities -- the laser cuts them as true circles
@@ -16,11 +16,11 @@
 //     height - y.
 //   - Mirroring reverses every arc. The bulge sign is not written from a rule
 //     about which way the path turns; it is computed from each arc's own start,
-//     end and centre AFTER the flip, so it cannot disagree with the geometry.
+//     end and center AFTER the flip, so it cannot disagree with the geometry.
 //
 // UNITS. R12 has no units field; $INSUNITS (4 = mm) is from later versions and
 // is written as a hint -- readers that do not know it skip it. Some software
-// will still ask for the units on import: they are millimetres.
+// will still ask for the units on import: they are millimeters.
 
 import { outline } from './cutpaths.js';
 import { isCircle } from './holes.js';
@@ -79,7 +79,7 @@ export function layerDXF(piece, holes) {
 }
 
 /**
- * A closed R12 POLYLINE. A vertex with `c` (an arc centre) starts an arc to the
+ * A closed R12 POLYLINE. A vertex with `c` (an arc center) starts an arc to the
  * next vertex: its bulge is tan(sweep / 4), positive when that arc runs
  * counter-clockwise -- decided by the arc's own geometry, in DXF coordinates.
  */
@@ -100,7 +100,7 @@ function polyline(layer, vs) {
 
 /**
  * A non-circular hole's cut path as vertices in piece coordinates (y down), each
- * optionally carrying the centre of the arc that leaves it. A rounded square
+ * optionally carrying the center of the arc that leaves it. A rounded square
  * runs the same way as svg.js draws it: along the top, then each corner's arc.
  */
 function vertices(h) {
@@ -109,6 +109,6 @@ function vertices(h) {
   const c = h.rot ? Math.SQRT1_2 : 1, sn = h.rot ? Math.SQRT1_2 : 0;
   const P = (x, y) => ({ x: h.cx + c * x - sn * y, y: h.cy + sn * x + c * y });
   if (r <= 1e-9) return [P(-half, -half), P(half, -half), P(half, half), P(-half, half)];
-  // straight edge start, straight edge end (+ arc round the corner centre)
+  // straight edge start, straight edge end (+ arc round the corner center)
   return rsqCorners(h).map((p) => (p.cx !== undefined ? { ...P(p.x, p.y), c: P(p.cx, p.cy) } : P(p.x, p.y)));
 }

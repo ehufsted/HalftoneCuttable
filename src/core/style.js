@@ -24,27 +24,27 @@
 // On a flat area S is just the image, so ε decides which flat darks fill in with
 // ink ("Fill level": 0 = outlines only). Across an edge S swings below the dark
 // side's value by about p times the edge's contrast, which draws the line. σ is
-// set in MILLIMETRES and converted with the piece width, so a line keeps its width
+// set in MILLIMETERS and converted with the piece width, so a line keeps its width
 // on the metal whatever the image's resolution.
 //
 // FOLLOW EDGES (the flow-based variant, FDoG, Kang et al. 2007): S is smoothed
 // along the image's edge direction before the threshold (core/steer.js), which
 // joins broken dashes into long, coherent strokes and drops isolated specks.
 //
-// POSTERIZE. A real reduction to K colours, not a tone-band trick:
+// POSTERIZE. A real reduction to K colors, not a tone-band trick:
 //   1. PALETTE. K-means clusters a sample of the image's pixels in OKLab (a
 //      perceptual space -- equal steps look equally different to the eye, unlike
 //      linear light or encoded sRGB), reusing separate.js's clustering (the same
 //      code the Sheets tab's palette suggester runs, minus its sheet-specific
 //      push away from the mean -- Posterize wants the image's ACTUAL dominant
-//      colours, not extra gamut for nested-hole mixing).
-//   2. ASSIGN. Every pixel takes its nearest palette colour, in the same OKLab
+//      colors, not extra gamut for nested-hole mixing).
+//   2. ASSIGN. Every pixel takes its nearest palette color, in the same OKLab
 //      space: a hard partition of the image into K regions.
-//   3. SIMPLIFY. Because K arbitrary colours have no natural order (unlike tone
-//      bands), each colour's region is cleaned up on its own -- an opening then
+//   3. SIMPLIFY. Because K arbitrary colors have no natural order (unlike tone
+//      bands), each color's region is cleaned up on its own -- an opening then
 //      a closing at the cleanup radius, removing small islands and filling small
 //      notches -- and any pixel a cleanup leaves claimed by none or several
-//      colours is resolved to whichever cleaned region is nearest, by the same
+//      colors is resolved to whichever cleaned region is nearest, by the same
 //      exact distance transform (core/edt.js) the stencil's own cleanup uses.
 //
 // CLAHE (Contrast Limited Adaptive Histogram Equalization, Pizer et al. 1987).
@@ -61,13 +61,13 @@
 //      spread back over every bin evenly. Unclipped, a truly flat or grainy tile
 //      has one huge spike, and equalizing it amplifies noise instead of detail.
 //   3. ADAPTIVE: a pixel's own curve is bilinearly interpolated between the four
-//      nearest tiles' curves (by its position relative to their centres), so the
+//      nearest tiles' curves (by its position relative to their centers), so the
 //      mapping changes smoothly and tile edges do not show as seams.
 // Applied to luminance only, and rescaled back into the pixel keeping its hue
 // (as Posterize's output does, and for the same reason): equalizing each of R,
-// G, B independently would shift colours, not just contrast.
+// G, B independently would shift colors, not just contrast.
 //
-// BLUR (Gaussian). A plain isotropic blur, in millimetres on the piece, each of
+// BLUR (Gaussian). A plain isotropic blur, in millimeters on the piece, each of
 // R, G, B independently -- unlike CLAHE and Posterize there is no hue-preserving
 // recombination step, because blurring already treats every channel alike and
 // needs none. Replaces the old global "Smoothing" setting (once applied inside
@@ -128,7 +128,7 @@ export const BLUR_DEFAULTS = {
 const blurFilter = {
   id: 'blur',
   label: 'Blur (Gaussian)',
-  blurb: 'Softens the image with a plain Gaussian blur, in millimetres on the piece. Replaces fine grain and noise with an even gradient before any pattern or filter reads it.',
+  blurb: 'Softens the image with a plain Gaussian blur, in millimeters on the piece. Replaces fine grain and noise with an even gradient before any pattern or filter reads it.',
   params: [
     { key: 'radius', label: 'Blur radius', type: 'range', min: 0, max: 10, step: 0.1, def: 2, unit: 'mm', dp: 1 },
   ],
@@ -152,7 +152,7 @@ const claheFilter = {
 };
 
 export const POSTERIZE_DEFAULTS = {
-  levels: 5,     // K palette colours
+  levels: 5,     // K palette colors
   cleanup: 1,    // mm: shapes narrower than this are opened away, notches this small are closed up
   seed: 1,
 };
@@ -160,9 +160,9 @@ export const POSTERIZE_DEFAULTS = {
 const posterizeFilter = {
   id: 'posterize',
   label: 'Posterize',
-  blurb: 'Reduces the image to a palette of N colours pulled from it (clustered the way the eye groups colours), then simplifies each colour’s shape: removes small islands and fills small notches, so a fleck of grain does not turn into a shape of its own.',
+  blurb: 'Reduces the image to a palette of N colors pulled from it (clustered the way the eye groups colors), then simplifies each color’s shape: removes small islands and fills small notches, so a fleck of grain does not turn into a shape of its own.',
   params: [
-    { key: 'levels', label: 'Palette colours', type: 'range', min: 2, max: 12, step: 1, def: 5 },
+    { key: 'levels', label: 'Palette colors', type: 'range', min: 2, max: 12, step: 1, def: 5 },
     { key: 'cleanup', label: 'Shape cleanup', type: 'range', min: 0, max: 5, step: 0.1, def: 1, unit: 'mm', dp: 1 },
     { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1 },
   ],
@@ -180,7 +180,7 @@ const lowPolyFilter = {
     { key: 'edges', label: 'Follow edges', type: 'checkbox', def: true, when: (p) => p.layout === 'adaptive' },
     { key: 'edgeThreshold', label: 'Edge threshold', type: 'range', min: 0.05, max: 0.9, step: 0.05, def: 0.3,
       when: (p) => p.layout === 'adaptive' && p.edges },
-    { key: 'colour', label: 'Facet colour', type: 'select', def: 'average', options: [['average', 'Average'], ['median', 'Median']] },
+    { key: 'color', label: 'Facet color', type: 'select', def: 'average', options: [['average', 'Average'], ['median', 'Median']] },
     { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1, when: (p) => p.layout === 'adaptive' },
   ],
   apply: (rgba, p, widthMm) => lowPoly(rgba, p, widthMm),
@@ -297,11 +297,11 @@ function claheStyle(rgba, style, widthMm) {
 /** Morphological closing: fill notches and holes narrower than 2r, keep the rest. */
 const closing = (A, w, h, r) => erode(dilate(A, w, h, r), w, h, r);
 
-/** OKLab distance squared, K-many centres against one point. */
-const nearest = (p, centres) => {
+/** OKLab distance squared, K-many centers against one point. */
+const nearest = (p, centers) => {
   let best = 0, bd = Infinity;
-  for (let k = 0; k < centres.length; k++) {
-    const c = centres[k];
+  for (let k = 0; k < centers.length; k++) {
+    const c = centers[k];
     const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
     if (d < bd) { bd = d; best = k; }
   }
@@ -316,17 +316,17 @@ function posterizeStyle(rgba, style, widthMm) {
   const toOKLab = (r, g, b) => rgbToOKLab(toLinear(r), toLinear(g), toLinear(b));
 
   // 1. the palette: K-means in OKLab (separate.js's clustering, no gamut push)
-  const { centres } = kmeansPoints(rgba, nCol, st.seed | 0, toOKLab);
-  const palette = centres.map((c) => oklabToRgb(c).map((v) => 255 * toEncoded(v)));
+  const { centers } = kmeansPoints(rgba, nCol, st.seed | 0, toOKLab);
+  const palette = centers.map((c) => oklabToRgb(c).map((v) => 255 * toEncoded(v)));
 
-  // 2. every pixel takes its nearest palette colour, in the same space
+  // 2. every pixel takes its nearest palette color, in the same space
   const label = new Uint8Array(n);
   for (let i = 0, q = 0; i < n; i++, q += 4) {
-    label[i] = nearest(toOKLab(data[q] / 255, data[q + 1] / 255, data[q + 2] / 255), centres);
+    label[i] = nearest(toOKLab(data[q] / 255, data[q + 1] / 255, data[q + 2] / 255), centers);
   }
 
-  // 3. shape cleanup, per colour, then resolve any pixel a cleanup leaves
-  // claimed by none or several colours to whichever cleaned region is nearest
+  // 3. shape cleanup, per color, then resolve any pixel a cleanup leaves
+  // claimed by none or several colors to whichever cleaned region is nearest
   const r = 0.5 * Math.max(0, st.cleanup) * (w / widthMm);
   let finalLabel = label;
   if (r > 0) {
@@ -346,7 +346,7 @@ function posterizeStyle(rgba, style, widthMm) {
     }
   }
 
-  // 4. paint: every pixel becomes its final label's palette colour
+  // 4. paint: every pixel becomes its final label's palette color
   const out = new Uint8ClampedArray(n * 4);
   for (let i = 0, q = 0; i < n; i++, q += 4) {
     const c = palette[finalLabel[i]];

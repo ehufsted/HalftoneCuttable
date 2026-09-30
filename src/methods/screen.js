@@ -4,14 +4,14 @@
 //
 //   lines        straight stripes that swell in the lights (banknote engraving)
 //   waves        the same, rippled
-//   concentric   rings round a centre
-//   spiral       one slot winding out from a centre
+//   concentric   rings round a center
+//   spiral       one slot winding out from a center
 //   turing       a reaction-diffusion labyrinth: spots in the darks, maze in
 //                the mids, a metal lace in the lights
 //
 // TONE. A stripe screen is a triangle wave s = |2·frac(phase) - 1|, which is
 // uniformly distributed across each period, so "cut where f > s" opens exactly a
-// fraction f of every period. The Turing screen is histogram-equalised to the
+// fraction f of every period. The Turing screen is histogram-equalized to the
 // same uniform distribution, so the same rule holds on average. The target f is
 // the image squeezed into [0, 1 - web/period]: a stripe of metal narrower than
 // the web cannot survive, so that is as open as a screen can go.
@@ -23,10 +23,10 @@
 //   - TIES. A long slot leaves a long strip of metal either side, attached only
 //     at its ends: one piece, but springy, and it warps in the heat. Ties are
 //     bars of metal across the slots every `ties` mm, staggered between
-//     neighbouring slots like brickwork. Concentric rings need them to stay in at
+//     neighboring slots like brickwork. Concentric rings need them to stay in at
 //     all; the bridge pass then catches anything they miss.
-//   - COLOUR. Every sheet uses the SAME screen, thresholded at its own cumulative
-//     open fraction (as the square grid's mixed colour), so deeper sheets' slots
+//   - COLOR. Every sheet uses the SAME screen, thresholded at its own cumulative
+//     open fraction (as the square grid's mixed color), so deeper sheets' slots
 //     sit inside the ones above; each is then narrowed by the registration
 //     allowance per sheet.
 
@@ -35,7 +35,7 @@ import { resize, makeImage } from '../shim/image.js';
 import { mulberry32 } from '../shim/random.js';
 import { luminance, toEncoded } from '../core/color.js';
 import { orientationField, steerBlur, resampleField } from '../core/steer.js';
-import { solveMix, fitMix, cumulativeOpen, mixColour } from '../core/separate.js';
+import { solveMix, fitMix, cumulativeOpen, mixColor } from '../core/separate.js';
 import { blur } from '../core/features.js';
 import { erode, edt, invert } from '../core/edt.js';
 import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
@@ -45,7 +45,7 @@ export const label = 'Screen';
 export const blurb = 'The image thresholded against a repeating screen -- lines, waves, rings, a spiral or a Turing labyrinth -- then cleaned, tied and bridged like a stencil.';
 
 const stripes = (p) => p.screen !== 'turing';
-const centred = (p) => p.screen === 'concentric' || p.screen === 'spiral';
+const centered = (p) => p.screen === 'concentric' || p.screen === 'spiral';
 
 export const params = [
   { key: 'screen', label: 'Screen', type: 'select', def: 'lines',
@@ -58,8 +58,8 @@ export const params = [
     when: (p) => p.screen === 'waves' },
   { key: 'wavelength', label: 'Wave length', type: 'range', min: 2, max: 60, step: 1, def: 15, unit: 'mm',
     when: (p) => p.screen === 'waves' },
-  { key: 'cx', label: 'Centre across', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5, when: centred },
-  { key: 'cy', label: 'Centre down', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5, when: centred },
+  { key: 'cx', label: 'Center across', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5, when: centered },
+  { key: 'cy', label: 'Center down', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5, when: centered },
   { key: 'ties', label: 'Tie spacing', type: 'range', min: 0, max: 60, step: 1, def: 20, unit: 'mm', when: stripes },
   { key: 'bridgeWidth', label: 'Tie width', type: 'range', min: 0.3, max: 5, step: 0.1, def: 1.2, unit: 'mm', dp: 1 },
   { key: 'range', label: 'Tone range', type: 'select', def: 'squeeze',
@@ -131,7 +131,7 @@ export function build(rgba, settings, params = {}) {
       solveMix(x, palette, m);
       fitMix(m, fMax, P.range);
       cumulativeOpen(m, F);
-      mixColour(m, palette, col);
+      mixColor(m, palette, col);
       for (let j = 0; j < nCut; j++) Fc[j].data[q] = F[j];
       for (let d = 0; d < D; d++) tgtC[d].data[q] = col[d];
     }
@@ -173,7 +173,7 @@ export function build(rgba, settings, params = {}) {
       screen[q] = tri(phase);
       if (L > 0) {
         // stagger the ties on alternate slots; round a ring, fit a whole number of them
-        const slot = Math.floor(phase);         // a slot spans one period, centred on +0.5
+        const slot = Math.floor(phase);         // a slot spans one period, centered on +0.5
         const stagger = (slot & 1) * 0.5;
         let spacing = L;
         if (ring) spacing = (2 * Math.PI * ring) / Math.max(3, Math.round((2 * Math.PI * ring) / L));
@@ -182,8 +182,10 @@ export function build(rgba, settings, params = {}) {
     }
   }
 
-  // ---- border metal, then each sheet through the stencil's pipeline
-  const e = web + kerf / 2;
+  // ---- border metal, then each sheet through the stencil's pipeline. The
+  // blank border, if any, is folded into the rim here rather than dropped from
+  // the traced loops afterward -- see stencil.js's build() for why.
+  const e = web + kerf / 2 + (s.border || 0);
   const frame = borderFrame(ww, wh, k, ky, W, H, e);
   const debug = { k, ww, wh, bridges: [], fallback: 0, unresolved: 0, specks: 0, floating: 0 };
   const { cleanSheet, bridgeSheet, finishSheet, measureWeb, traceSheet } = sheetTools({
@@ -212,7 +214,7 @@ export function build(rgba, settings, params = {}) {
       // 5-11% short on flat fields. Measure what the cleanup left, region by
       // region, raise the target by the shortfall, and cut again.
       // The regions must be LARGER than the pattern: two periods across. Measured
-      // at the coarse raster's third of a millimetre instead, the "shortfall" was
+      // at the coarse raster's third of a millimeter instead, the "shortfall" was
       // the labyrinth itself, and adding it back inverted the pattern against its
       // own screen (a 0.28 target came out 0.04).
       const rw = Math.max(1, Math.round(W / (2 * p))), rh = Math.max(1, Math.round(H / (2 * p)));
@@ -265,18 +267,18 @@ export function build(rgba, settings, params = {}) {
     // raster (Fc/tgtC above) could report the same "wanted the top sheet open but
     // fitMix clipped it to 0 / to fMax" check squareGrid does per cell, but that
     // would be measured BEFORE the screen threshold and cleanup, not after -- an
-    // approximation whose error hasn't been characterised, so left undone rather
+    // approximation whose error hasn't been characterized, so left undone rather
     // than guessed at.
     dropped: 0, saturated: 0, note: notes.join(' · '),
     debug: { ...debug, cuts, frame, tie, screen, fMax, orient },
   };
 
   /**
-   * A homogeneous Turing labyrinth, as a screen: histogram-equalised to [0, 1).
+   * A homogeneous Turing labyrinth, as a screen: histogram-equalized to [0, 1).
    *
    * Grown by the classic activator-inhibitor shortcut: blur at two radii, keep
    * the difference (short-range excitation, long-range inhibition), squash,
-   * repeat. Normalising each round by the difference's own spread keeps it from
+   * repeat. Normalizing each round by the difference's own spread keeps it from
    * dying out or saturating. With the two blurs at 1.95 and 3.9 px, the size that
    * survives best is 12.7 px, so at 12 px per period the maze's own period is
    * about 6% over the setting.
@@ -348,7 +350,7 @@ export function build(rgba, settings, params = {}) {
       // unit of anisotropy, scaled by the local strength
       big = steerBlur(resampleField(orient.field, tw, tht, ww, wh), ww, wh, 1, (P.anisotropy * p * k) / 2)(depth.data);
     }
-    // equalise: each pixel's rank among all of them, by a fine histogram
+    // equalize: each pixel's rank among all of them, by a fine histogram
     let lo = Infinity, hi = -Infinity;
     for (let i = 0; i < NP; i++) { if (big[i] < lo) lo = big[i]; if (big[i] > hi) hi = big[i]; }
     const B = 4096, span = hi - lo || 1;

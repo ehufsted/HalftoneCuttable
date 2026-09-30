@@ -1,6 +1,6 @@
-// Colour conversions.
+// Color conversions.
 //
-// ALL TONE ARITHMETIC IN THIS APP IS IN LINEAR LIGHT. A cut sheet mixes colours
+// ALL TONE ARITHMETIC IN THIS APP IS IN LINEAR LIGHT. A cut sheet mixes colors
 // by area -- half the cell open lets through half the light -- and area mixing is
 // linear in light, not in the gamma-encoded values an image file stores. So the
 // target a method aims at, the renderer's averaging, and the fidelity score all
@@ -39,7 +39,7 @@ export function linearToHex(rgb) {
  * (equal steps look equally different), unlike linear light (equal steps look
  * MORE different in the darks) or encoded sRGB (a gamma curve chosen for storage,
  * not perceptual spacing). Palette clustering measures distance here so the
- * palette groups colours the way a person would, not the way the file format
+ * palette groups colors the way a person would, not the way the file format
  * happens to encode them.
  */
 export function rgbToOKLab(r, g, b) {
@@ -55,7 +55,7 @@ export function rgbToOKLab(r, g, b) {
 }
 
 /** OKLab -> linear sRGB, the inverse of `rgbToOKLab`. Can overshoot [0,1]: a
- *  cluster centre outside the sRGB gamut clamps at the edges of the display. */
+ *  cluster center outside the sRGB gamut clamps at the edges of the display. */
 export function oklabToRgb([L, a, b]) {
   const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = L - 0.1055613458 * a - 0.0638541728 * b;

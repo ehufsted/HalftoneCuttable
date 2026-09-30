@@ -6,7 +6,7 @@
 // slots too narrow to cut, metal too thin to hold, the kerf offset -- is
 // thresholds on these distances.
 //
-// Distances are between PIXEL CENTRES, in pixels.
+// Distances are between PIXEL CENTERS, in pixels.
 
 const INF = 1e20;
 

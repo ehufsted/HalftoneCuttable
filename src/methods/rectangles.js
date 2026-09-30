@@ -6,7 +6,7 @@
 // rectangles:
 //
 //   1. of all current rectangles, take the one whose best split helps most --
-//      the largest drop in total squared colour error (area-weighted, so a big
+//      the largest drop in total squared color error (area-weighted, so a big
 //      varied rectangle goes before a small one)
 //   2. its best split: every vertical and horizontal line through it, one work
 //      pixel apart and at least `minSide` from its sides, scored by the error of
@@ -21,13 +21,13 @@
 // structural lines and fine late ones. The outline frame is as bold as the first
 // cut.
 //
-// The rectangles are cells of the shared cell-web engine (cellWeb.js), so colour,
+// The rectangles are cells of the shared cell-web engine (cellWeb.js), so color,
 // tone, the web guarantee and the export come with them. At a T-junction a
-// rectangle's side borders several neighbours, so each side is broken at the
-// neighbours' corners into segments, each labelled with the one cell across it.
+// rectangle's side borders several neighbors, so each side is broken at the
+// neighbors' corners into segments, each labeled with the one cell across it.
 // All segments of a side lie on the same cut, so they carry the same width.
 //
-// Fill: 'flat' opens every rectangle fully onto its colour -- with Solid colour
+// Fill: 'flat' opens every rectangle fully onto its color -- with Solid color
 // regions, a flat block of its sheet, the lines being the top sheet: Mondrian's
 // look. 'tone' sizes each hole by the image, as the other cell webs do.
 
@@ -35,17 +35,17 @@ import { buildCellWeb } from './cellWeb.js';
 
 export const id = 'rectangles';
 export const label = 'Rectangles';
-export const blurb = 'A Mondrian-like composition: the image divided by straight cuts, each placed where it best separates the image, into flat blocks of the sheet colours. The first cuts can be bolder than the later ones.';
+export const blurb = 'A Mondrian-like composition: the image divided by straight cuts, each placed where it best separates the image, into flat blocks of the sheet colors. The first cuts can be bolder than the later ones.';
 
 export const params = [
   { key: 'count', label: 'Rectangles', type: 'range', min: 2, max: 300, step: 1, def: 30 },
   { key: 'minSide', label: 'Smallest side', type: 'range', min: 2, max: 40, step: 0.5, def: 8, unit: 'mm', dp: 1 },
   { key: 'cutWidth', label: 'Cut width', type: 'range', min: 0.5, max: 10, step: 0.1, def: 3, unit: 'mm', dp: 1 },
-  { key: 'taper', label: 'Cut widths', type: 'select', def: 'taper',
+  { key: 'taper', label: 'Cut widths', type: 'select', def: 'even',
     options: [['taper', 'Narrower with each cut'], ['even', 'All the same']] },
-  { key: 'fill', label: 'Fill', type: 'select', def: 'flat', options: [['flat', 'Flat colour'], ['tone', 'By tone']] },
-  { key: 'regions', label: 'Colour regions', type: 'select', def: 'solid',
-    options: [['solid', 'Solid colours'], ['mixed', 'Mixed colours']], when: (p, env) => env.mode === 'color' },
+  { key: 'fill', label: 'Fill', type: 'select', def: 'tone', options: [['flat', 'Flat color'], ['tone', 'By tone']] },
+  { key: 'regions', label: 'Color regions', type: 'select', def: 'mixed',
+    options: [['solid', 'Solid colors'], ['mixed', 'Mixed colors']], when: (p, env) => env.mode === 'color' },
   { key: 'range', label: 'Tone range', type: 'select', def: 'squeeze',
     options: [['squeeze', 'Squeeze to fit'], ['clip', 'Clip highlights']], when: (p) => p.fill === 'tone' },
   { key: 'diffuse', label: 'Error diffusion', type: 'checkbox', def: true, when: (p) => p.fill === 'tone' },
@@ -81,7 +81,7 @@ export function rectLayout(c) {
   const box = (T, i0, j0, i1, j1) => T[j1 * W1 + i1] - T[j0 * W1 + i1] - T[j1 * W1 + i0] + T[j0 * W1 + i0];
   const colI = (x) => Math.min(ww, Math.max(0, Math.round(x * kx)));
   const rowJ = (y) => Math.min(wh, Math.max(0, Math.round(y * ky)));
-  /** Squared colour error of a rectangle of pixels about its own mean. */
+  /** Squared color error of a rectangle of pixels about its own mean. */
   const sseP = (i0, j0, i1, j1) => {
     const n = (i1 - i0) * (j1 - j0);
     if (n <= 0) return 0;
@@ -142,10 +142,10 @@ export function rectLayout(c) {
   }
   const N = leaves.length;
 
-  // ---- cells: each side broken at the neighbours' corners into labelled segments
+  // ---- cells: each side broken at the neighbors' corners into labeled segments
   const eps = 1e-6;
   const cells = [], sideOfEdge = [];
-  const neighbourAlong = (i, horizontal, line, from, to, otherSide) => {
+  const neighborAlong = (i, horizontal, line, from, to, otherSide) => {
     // segments [from, to] along a side, each with the cell across it
     const cuts2 = [from, to];
     const who = [];
@@ -169,13 +169,13 @@ export function rectLayout(c) {
   leaves.forEach((r, i) => {
     const xs = [], ys = [], lab = [], side = [];
     // top: y = y0, x ascending; the cell across has its BOTTOM on this line
-    for (const s of neighbourAlong(i, true, r.y0, r.x0, r.x1, false)) { xs.push(s.at); ys.push(r.y0); lab.push(s.q); side.push(0); }
+    for (const s of neighborAlong(i, true, r.y0, r.x0, r.x1, false)) { xs.push(s.at); ys.push(r.y0); lab.push(s.q); side.push(0); }
     // right: x = x1, y ascending; across has its LEFT on this line
-    for (const s of neighbourAlong(i, false, r.x1, r.y0, r.y1, true)) { xs.push(r.x1); ys.push(s.at); lab.push(s.q); side.push(1); }
+    for (const s of neighborAlong(i, false, r.x1, r.y0, r.y1, true)) { xs.push(r.x1); ys.push(s.at); lab.push(s.q); side.push(1); }
     // bottom: y = y1, x descending; across has its TOP on this line
-    for (const s of neighbourAlong(i, true, r.y1, r.x1, r.x0, true)) { xs.push(s.at); ys.push(r.y1); lab.push(s.q); side.push(2); }
+    for (const s of neighborAlong(i, true, r.y1, r.x1, r.x0, true)) { xs.push(s.at); ys.push(r.y1); lab.push(s.q); side.push(2); }
     // left: x = x0, y descending; across has its RIGHT on this line
-    for (const s of neighbourAlong(i, false, r.x0, r.y1, r.y0, false)) { xs.push(r.x0); ys.push(s.at); lab.push(s.q); side.push(3); }
+    for (const s of neighborAlong(i, false, r.x0, r.y1, r.y0, false)) { xs.push(r.x0); ys.push(s.at); lab.push(s.q); side.push(3); }
     cells.push({ xs, ys, lab });
     sideOfEdge.push(side);
   });

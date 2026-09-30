@@ -1,4 +1,4 @@
-// Hilbert curve index: a 1-D order over a 2-D grid that keeps neighbours near
+// Hilbert curve index: a 1-D order over a 2-D grid that keeps neighbors near
 // each other. Walking the image in this order and stepping through its ink one
 // quantum at a time spreads points (or decisions) evenly in space -- the 2-D
 // structure of a 1-D stratified sample -- with none of the rows a raster scan

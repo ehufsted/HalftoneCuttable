@@ -11,11 +11,11 @@
 //    they need none.
 //  - Every screen gives one piece whose every connection is at least the web
 //    wide (the stencil's shrink-then-flood-fill check).
-//  - The Turing screen is equalised to uniform, so it too opens the asked
+//  - The Turing screen is equalized to uniform, so it too opens the asked
 //    fraction overall.
-//  - In colour, deeper sheets' slots sit inside the ones above.
+//  - In color, deeper sheets' slots sit inside the ones above.
 
-import { check, section, num, flatGrey, makeRGBA, plain } from './runner.js';
+import { check, section, num, flatGray, makeRGBA, plain } from './runner.js';
 import method from '../src/methods/screen.js';
 import { pieceCount } from '../src/core/structure.js';
 import { rasterizeHoles } from '../src/core/render.js';
@@ -25,17 +25,17 @@ import { toEncoded } from '../src/core/color.js';
 const base = { ...plain, widthMm: 60, web: 0.6, minHole: 0.6, kerf: 0.15 };
 const PX = 20;
 
-/** A flat grey whose squeezed target open fraction is f (for a stripe screen;
+/** A flat gray whose squeezed target open fraction is f (for a stripe screen;
  * the Turing band is smaller, and each run is scored against its own target). */
-function greyFor(f, period, web) {
+function grayFor(f, period, web) {
   const fMax = 1 - web / period;
   const v = Math.round(255 * toEncoded(f / fMax));
-  return flatGrey(150, 100, v);
+  return flatGray(150, 100, v);
 }
 
 const meanOf = (a) => a.reduce((s, v) => s + v, 0) / a.length;
 
-/** A grey image from fn(x, y) -> brightness in [0, 1] (encoded). */
+/** A gray image from fn(x, y) -> brightness in [0, 1] (encoded). */
 const makeImage2 = (w, h, fn) => makeRGBA(w, h, (x, y) => { const v = Math.round(255 * fn(x, y)); return [v, v, v]; });
 
 /** Jaggedness (mm) and sharp tips per 100 mm of a sheet's cut paths. */
@@ -82,12 +82,12 @@ function thickPieces(b, holes, kerf, web) {
 }
 
 export function run() {
-  section('method.screen', 'Stripe geometry, tone, ties, bridges, one piece for every screen, Turing uniformity, colour nesting.');
+  section('method.screen', 'Stripe geometry, tone, ties, bridges, one piece for every screen, Turing uniformity, color nesting.');
 
   // ---- stripe geometry: vertical stripes (angle 0), no ties
   {
     const f = 0.5, period = 3;
-    const b = method.build(greyFor(f, period, base.web), base, { screen: 'lines', angle: 0, period, ties: 0 });
+    const b = method.build(grayFor(f, period, base.web), base, { screen: 'lines', angle: 0, period, ties: 0 });
     const { cuts, k, ww, wh } = b.debug;
     const row = Math.floor(wh / 2), C = cuts[0];
     const runs = [];
@@ -98,8 +98,8 @@ export function run() {
       if (!c && start >= 0) { runs.push([start, i]); start = -1; }
     }
     const widths = runs.map(([a, z]) => (z - a) / k);
-    const centres = runs.map(([a, z]) => (a + z) / 2 / k);
-    const gaps = centres.slice(1).map((c, i) => c - centres[i]);
+    const centers = runs.map(([a, z]) => (a + z) / 2 / k);
+    const gaps = centers.slice(1).map((c, i) => c - centers[i]);
     const target = f * period;
     check('lines: every slot is f × period wide', widths.every((w) => Math.abs(w - target) <= 1.5 / k),
       `${runs.length} slots, widths ${num(Math.min(...widths), 3)}–${num(Math.max(...widths), 3)} mm, want ${num(target, 3)}`);
@@ -113,11 +113,11 @@ export function run() {
     let worst = 0;
     // Rings are tied, as they would be used: untied, every ring is an island held
     // by two bridges, which are metal the tone cannot have -- 2 × 1.2 mm of a
-    // ring's slot, 4% at 10 mm radius and 18% within 8 mm of the centre (measured).
+    // ring's slot, 4% at 10 mm radius and 18% within 8 mm of the center (measured).
     // Ties are paid back in the slot width; bridges are not.
     for (const screen of ['lines', 'concentric', 'turing']) {
       for (const f of [0.3, 0.5, 0.7]) {
-        const b = method.build(greyFor(f, 3, base.web), base, { screen, period: 3, ties: screen === 'concentric' ? 15 : 0 });
+        const b = method.build(grayFor(f, 3, base.web), base, { screen, period: 3, ties: screen === 'concentric' ? 15 : 0 });
         const t = meanOf(Array.from(b.target)), g = meanOf(Array.from(b.achieved));
         worst = Math.max(worst, Math.abs(g - t) / t);
         rows.push(`${screen} ${f}: ${num(g, 3)}/${num(t, 3)}`);
@@ -125,7 +125,7 @@ export function run() {
     }
     // with ties on, and waves (whose band is set by their tightest spacing)
     for (const [name, prm] of [['lines+ties', { screen: 'lines', ties: 15 }], ['waves+ties', { screen: 'waves', ties: 15 }]]) {
-      const b = method.build(greyFor(0.5, 3, base.web), base, { period: 3, ...prm });
+      const b = method.build(grayFor(0.5, 3, base.web), base, { period: 3, ...prm });
       const t = meanOf(Array.from(b.target)), g = meanOf(Array.from(b.achieved));
       worst = Math.max(worst, Math.abs(g - t) / t);
       rows.push(`${name}: ${num(g, 3)}/${num(t, 3)}`);
@@ -136,7 +136,7 @@ export function run() {
 
   // ---- ties
   {
-    const img = greyFor(0.6, 3, base.web);
+    const img = grayFor(0.6, 3, base.web);
     const longest = (b) => Math.max(...b.layers[0].map((L) => Math.max(...L.ys) - Math.min(...L.ys)));
     const tied = method.build(img, base, { screen: 'lines', angle: 0, period: 3, ties: 10 });
     const loose = method.build(img, base, { screen: 'lines', angle: 0, period: 3, ties: 0 });
@@ -146,7 +146,7 @@ export function run() {
 
   // ---- rings are islands: bridged without ties, held by the ties with them
   {
-    const img = greyFor(0.5, 3, base.web);
+    const img = grayFor(0.5, 3, base.web);
     const bare = method.build(img, base, { screen: 'concentric', period: 3, ties: 0 });
     const tied = method.build(img, base, { screen: 'concentric', period: 3, ties: 12 });
     const pb = pieceCount({ ...bare, kerf: base.kerf }, bare.layers[0], PX);
@@ -190,7 +190,7 @@ export function run() {
   // per 100 mm on the rhino; the signed-distance screen with a smoothed trace
   // measured 18.5 µm and 4.2.
   {
-    const b = method.build(greyFor(0.5, 3, base.web), base, { screen: 'turing', period: 3 });
+    const b = method.build(grayFor(0.5, 3, base.web), base, { screen: 'turing', period: 3 });
     const { jag, tips } = roughness(b.layers[0]);
     check('turing: edges are smooth (no pixel staircase, few sharp tips)', jag < 0.022 && tips < 6,
       `jaggedness ${num(jag * 1000, 1)} µm, ${num(tips, 2)} sharp tips per 100 mm`);
@@ -221,7 +221,7 @@ export function run() {
       }
       return den ? num / den : 0;
     };
-    // radial ramp: bright at the centre, dark outside -- edges are circles
+    // radial ramp: bright at the center, dark outside -- edges are circles
     const radial = makeImage2(300, 300, (x, y) => Math.max(0, 1 - Math.hypot(x - 150, y - 150) / 150));
     const s = { ...base, widthMm: 60 };
     const tangent = (x, y) => Math.atan2(y - 30, x - 30) + Math.PI / 2;
@@ -236,7 +236,7 @@ export function run() {
       aE > 0.3 && aG < -0.3 && Math.abs(a0) < 0.1,
       `alignment with the edges: ${num(aE, 2)} along edges, ${num(aG, 2)} along gradient, ${num(a0, 2)} at anisotropy 0 (${ms} ms for the anisotropic run)`);
 
-    const flat = greyFor(0.5, 3, base.web);
+    const flat = grayFor(0.5, 3, base.web);
     const fb = method.build(flat, base, { screen: 'turing', period: 3, anisotropy: 2 });
     const everywhere = () => true;
     const ax = align(fb, () => 0, everywhere), ad = align(fb, () => Math.PI / 4, everywhere);
@@ -257,19 +257,19 @@ export function run() {
 
   // ---- the Turing screen is uniform, and seeded
   {
-    const a = method.build(greyFor(0.5, 3, base.web), base, { screen: 'turing', period: 3, seed: 2 });
+    const a = method.build(grayFor(0.5, 3, base.web), base, { screen: 'turing', period: 3, seed: 2 });
     const sc = a.debug.screen;
     let below = 0;
     for (let i = 0; i < sc.length; i++) if (sc[i] < 0.5) below++;
-    check('turing: the equalised screen is uniform (half of it below 0.5)', Math.abs(below / sc.length - 0.5) < 0.01,
+    check('turing: the equalized screen is uniform (half of it below 0.5)', Math.abs(below / sc.length - 0.5) < 0.01,
       `${num(100 * below / sc.length, 2)}% below 0.5`);
-    const c = method.build(greyFor(0.5, 3, base.web), base, { screen: 'turing', period: 3, seed: 2 });
-    const d = method.build(greyFor(0.5, 3, base.web), base, { screen: 'turing', period: 3, seed: 3 });
+    const c = method.build(grayFor(0.5, 3, base.web), base, { screen: 'turing', period: 3, seed: 2 });
+    const d = method.build(grayFor(0.5, 3, base.web), base, { screen: 'turing', period: 3, seed: 3 });
     const key = (b) => b.layers[0].slice(0, 20).map((L) => L.xs[0].toFixed(5)).join(',');
     check('turing: same seed, same pattern; another seed, another', key(a) === key(c) && key(a) !== key(d));
   }
 
-  // ---- colour: deeper slots inside the ones above
+  // ---- color: deeper slots inside the ones above
   {
     const s = { ...base, mode: 'color', palette: ['#202020', '#d02020', '#2040d0'], reg: 0.3 };
     const b = method.build(makeRGBA(150, 100, () => [120, 60, 150]), s, { screen: 'lines', period: 4, ties: 15 });
@@ -277,8 +277,8 @@ export function run() {
     let deep = 0, outside = 0;
     for (let i = 0; i < C1.length; i++) if (C1[i]) { deep++; if (!C0[i]) outside++; }
     const pieces = b.layers.map((L) => pieceCount({ ...b, kerf: s.kerf }, L, PX));
-    check('colour: the deeper sheet’s slots lie inside the top sheet’s', deep > 0 && outside / deep < 0.01,
+    check('color: the deeper sheet’s slots lie inside the top sheet’s', deep > 0 && outside / deep < 0.01,
       `${num(100 * outside / Math.max(1, deep), 2)}% of its cut outside, ${deep} px cut`);
-    check('colour: every sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
+    check('color: every sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
   }
 }

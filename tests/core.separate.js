@@ -1,13 +1,13 @@
-// Colour separation: the mix solver, the stack bookkeeping, the palette suggester.
+// Color separation: the mix solver, the stack bookkeeping, the palette suggester.
 //
-// PREDICTION. A colour built as a known convex mix of an affinely independent
-// palette is recovered exactly. A colour outside the palette's hull gets a valid
+// PREDICTION. A color built as a known convex mix of an affinely independent
+// palette is recovered exactly. A color outside the palette's hull gets a valid
 // mix (non-negative, summing to 1) that is no worse than any other point of the
 // hull -- checked against a few thousand random ones, which would catch a solver
 // that returned a feasible but sub-optimal face.
 
 import { check, section, mkRand, makeRGBA } from './runner.js';
-import { solveMix, mixColour, cumulativeOpen, visibleMix, suggestPalette } from '../src/core/separate.js';
+import { solveMix, mixColor, cumulativeOpen, visibleMix, suggestPalette } from '../src/core/separate.js';
 
 function randomPalette(rand, n) {
   return Array.from({ length: n }, () => [rand(), rand(), rand()]);
@@ -22,7 +22,7 @@ function randomSimplex(rand, n) {
 const dist2 = (a, b) => a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0);
 
 export function run() {
-  section('core.separate', 'Mix solver on known mixes and on colours outside the hull; stack bookkeeping; palette suggestion.');
+  section('core.separate', 'Mix solver on known mixes and on colors outside the hull; stack bookkeeping; palette suggestion.');
   const rand = mkRand(7);
 
   let worst = 0;
@@ -30,21 +30,21 @@ export function run() {
     for (let t = 0; t < 200; t++) {
       const pal = randomPalette(rand, n);
       const m = randomSimplex(rand, n);
-      const x = Array.from(mixColour(m, pal));
+      const x = Array.from(mixColor(m, pal));
       const got = solveMix(x, pal);
-      // compare colours, not weights: for n = 2 in 3-D, weights are unique too,
+      // compare colors, not weights: for n = 2 in 3-D, weights are unique too,
       // but a near-degenerate random palette can make weights ill-conditioned
-      worst = Math.max(worst, Math.sqrt(dist2(Array.from(mixColour(got, pal)), x)));
+      worst = Math.max(worst, Math.sqrt(dist2(Array.from(mixColor(got, pal)), x)));
     }
   }
-  check('a colour inside the hull is reproduced exactly', worst < 1e-7, `worst colour error ${worst.toExponential(2)}`);
+  check('a color inside the hull is reproduced exactly', worst < 1e-7, `worst color error ${worst.toExponential(2)}`);
 
   worst = 0;
   let wm = 0;
   for (let t = 0; t < 300; t++) {
     const pal = randomPalette(rand, 4);
     const m = randomSimplex(rand, 4);
-    const got = solveMix(Array.from(mixColour(m, pal)), pal);
+    const got = solveMix(Array.from(mixColor(m, pal)), pal);
     for (let i = 0; i < 4; i++) wm = Math.max(wm, Math.abs(got[i] - m[i]));
   }
   check('4 sheets in 3-D: the weights themselves are recovered', wm < 1e-6, `worst weight error ${wm.toExponential(2)}`);
@@ -57,9 +57,9 @@ export function run() {
     const m = solveMix(x, pal);
     const sum = m.reduce((a, b) => a + b, 0);
     if (Math.abs(sum - 1) > 1e-9 || m.some((v) => v < 0)) invalid++;
-    const best = dist2(Array.from(mixColour(m, pal)), x);
+    const best = dist2(Array.from(mixColor(m, pal)), x);
     for (let k = 0; k < 200; k++) {
-      const c = Array.from(mixColour(randomSimplex(rand, n), pal));
+      const c = Array.from(mixColor(randomSimplex(rand, n), pal));
       if (dist2(c, x) < best - 1e-12) { beaten++; break; }
     }
   }
@@ -81,6 +81,6 @@ export function run() {
   const img = makeRGBA(80, 40, (x) => (x < 40 ? [255, 0, 0] : [0, 0, 255]));
   const a = suggestPalette(img, 2), b = suggestPalette(img, 2);
   check('suggestion is deterministic', a.join() === b.join(), a.join(' '));
-  check('suggestion finds the two colours of a two-colour image',
+  check('suggestion finds the two colors of a two-color image',
     a.slice().sort().join() === ['#0000ff', '#ff0000'].join(), a.join(' '));
 }

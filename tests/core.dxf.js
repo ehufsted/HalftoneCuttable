@@ -17,7 +17,7 @@ import { sheetFileName } from '../src/core/names.js';
 import grid from '../src/methods/squareGrid.js';
 import stencil from '../src/methods/stencil.js';
 
-/** A small R12 reader: header variables, layer colours, circles, polylines. */
+/** A small R12 reader: header variables, layer colors, circles, polylines. */
 function readDXF(text) {
   const lines = text.split('\n');
   const pairs = [];
@@ -142,11 +142,11 @@ export function run() {
 
   // ---- names
   {
-    const bw = { mode: 'bw', nCut: 1, colours: ['#2B2B2B'] };
-    const col = { mode: 'color', nCut: 2, colours: ['#eae8e7', '#439dde', '#9d3400'] };
+    const bw = { mode: 'bw', nCut: 1, colors: ['#2B2B2B'] };
+    const col = { mode: 'color', nCut: 2, colors: ['#eae8e7', '#439dde', '#9d3400'] };
     const got = [sheetFileName('rhino', 0, bw, 'dxf', true), sheetFileName('rhino', 0, bw, 'svg'),
       ...[0, 1, 2].map((i) => sheetFileName('rhino', i, col, 'dxf', true)), sheetFileName('rhino', 2, col, 'svg')];
     const want = ['rhino-2b2b2b.dxf', 'rhino.svg', 'rhino-1-top-eae8e7.dxf', 'rhino-2-sheet2-439dde.dxf', 'rhino-3-base-9d3400.dxf', 'rhino-3-base.svg'];
-    check('file names: DXF carries the sheet colour, SVG as before', got.join() === want.join(), got.join(', '));
+    check('file names: DXF carries the sheet color, SVG as before', got.join() === want.join(), got.join(', '));
   }
 }

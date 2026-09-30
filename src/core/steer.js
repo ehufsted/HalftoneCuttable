@@ -115,8 +115,8 @@ export function steerBlur(field, w, h, sigma, stretch) {
 /**
  * A direction field resampled to another raster size. Directions are
  * interpolated as strength-weighted DOUBLED angles (cos 2θ, sin 2θ) · strength, so
- * opposite arrows average to the same line instead of cancelling, and a weak
- * direction does not pull a strong neighbour round.
+ * opposite arrows average to the same line instead of canceling, and a weak
+ * direction does not pull a strong neighbor round.
  */
 export function resampleField(f, w, h, W2, H2) {
   const n = w * h, c = makeImage(w, h), s = makeImage(w, h);

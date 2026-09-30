@@ -17,8 +17,8 @@ import { gridHoles, holePerimeter, holeFinishedArea } from './holes.js';
 
 /**
  * The square grid's thinnest metal in one cut layer, in mm: along each axis
- * between neighbouring holes, and from an edge hole to the outline. Diagonal
- * neighbours need no check -- two holes each within (pitch - web) of their own
+ * between neighboring holes, and from an edge hole to the outline. Diagonal
+ * neighbors need no check -- two holes each within (pitch - web) of their own
  * cell leave at least web·√2 between diagonal cells. Infinity if no holes.
  */
 export function thinnestWeb(ctx, sizes, spec) {

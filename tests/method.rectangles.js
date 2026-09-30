@@ -4,11 +4,11 @@
 //  - Exactly `count` rectangles, tiling the inset rectangle, none with a side
 //    under `minSide`.
 //  - The cuts follow the image: a two-tone image's first cut lands on its edge.
-//  - T-junctions are handled: every labelled neighbour really is across that edge.
+//  - T-junctions are handled: every labeled neighbor really is across that edge.
 //  - Taper: the first cut's metal is `cutWidth` wide, and widths fall with rank
 //    to the min web; "All the same" keeps every cut at `cutWidth`.
 //  - One piece, webs never under the setting (claimed and measured), and in
-//    colour each rectangle takes its region's sheet, filled flat.
+//    color each rectangle takes its region's sheet, filled flat.
 
 import { check, section, num, noiseRGBA, makeRGBA, plain } from './runner.js';
 import method from '../src/methods/rectangles.js';
@@ -34,7 +34,7 @@ function wallWebs(b) {
 }
 
 export function run() {
-  section('method.rectangles', 'Count and tiling; cuts on the image’s edges; T-junction neighbours; tapering cut widths; one piece; sheet colours.');
+  section('method.rectangles', 'Count and tiling; cuts on the image’s edges; T-junction neighbors; tapering cut widths; one piece; sheet colors.');
 
   // ---- count, tiling, smallest side
   {
@@ -55,7 +55,7 @@ export function run() {
       `${c.dir === 'v' ? 'vertical' : 'horizontal'} cut at ${num(c.pos, 2)} mm, the edge at 30 mm`);
   }
 
-  // ---- T-junctions: every labelled neighbour is really across the edge
+  // ---- T-junctions: every labeled neighbor is really across the edge
   {
     const b = method.build(noiseRGBA(300, 200, 4, false), base, { count: 60, minSide: 3 });
     const { cells, leaves } = b.debug;
@@ -75,15 +75,19 @@ export function run() {
         if (q >= 0 && !cells[q].lab.includes(i)) mutual++;
       }
     });
-    check('T-junctions: every edge is labelled with the rectangle across it, both ways', bad === 0 && mutual === 0,
-      `${bad} of ${walls} edges mislabelled, ${mutual} one-sided`);
+    check('T-junctions: every edge is labeled with the rectangle across it, both ways', bad === 0 && mutual === 0,
+      `${bad} of ${walls} edges mislabeled, ${mutual} one-sided`);
   }
 
   // ---- tapering cut widths
   {
     const img = noiseRGBA(300, 200, 5, false);
-    const t = method.build(img, base, { count: 20, cutWidth: 3, taper: 'taper', minSide: 5 });
-    const e = method.build(img, base, { count: 20, cutWidth: 3, taper: 'even', minSide: 5 });
+    // Flat fill, pinned explicitly: every cell opens as far as the wall width
+    // allows, so the measured metal between cells reads back widthOf(rank)
+    // directly. With the tone fill (now the default) a cell's hole is sized by
+    // its own tone instead, and the walls no longer trace the taper this checks.
+    const t = method.build(img, base, { count: 20, cutWidth: 3, taper: 'taper', minSide: 5, fill: 'flat' });
+    const e = method.build(img, base, { count: 20, cutWidth: 3, taper: 'even', minSide: 5, fill: 'flat' });
     const wt = wallWebs(t), we = wallWebs(e);
     const ranks = [...wt.keys()].filter((r) => r >= 0).sort((a, b) => a - b);
     const first = wt.get(ranks[0]), last = wt.get(ranks[ranks.length - 1]);
@@ -100,7 +104,7 @@ export function run() {
   {
     const cases = [
       ['B&W noise', noiseRGBA(300, 200, 6, false), {}, { count: 50, minSide: 4 }],
-      ['colour quadrants, 4 sheets, solid', quadrants([200, 30, 30], [30, 60, 200], [240, 240, 240], [200, 30, 30]),
+      ['color quadrants, 4 sheets, solid', quadrants([200, 30, 30], [30, 60, 200], [240, 240, 240], [200, 30, 30]),
         { mode: 'color', palette: ['#101010', '#d02020', '#2040d0', '#f0f0f0'], reg: 0.3 }, { count: 12, minSide: 5 }],
     ];
     const fails = [];
@@ -123,10 +127,14 @@ export function run() {
     check('every cut sheet is one piece, no web under the setting (claimed and measured)', fails.length === 0, fails.join('; ') || '2 configurations');
   }
 
-  // ---- sheet colours: each quadrant's rectangles take its sheet, filled flat
+  // ---- sheet colors: each quadrant's rectangles take its sheet, filled flat.
+  // Flat fill and solid regions, pinned explicitly (mixed regions -- now the
+  // default -- blend a rectangle's own color with its neighbors' near a wall,
+  // which this check's "shows it at full flat strength" would rightly fail).
   {
     const s = { ...base, mode: 'color', palette: ['#101010', '#d02020', '#2040d0', '#f0f0f0'], reg: 0.3 };
-    const b = method.build(quadrants([200, 30, 30], [30, 60, 200], [240, 240, 240], [200, 30, 30]), s, { count: 12, minSide: 5 });
+    const b = method.build(quadrants([200, 30, 30], [30, 60, 200], [240, 240, 240], [200, 30, 30]), s,
+      { count: 12, minSide: 5, fill: 'flat', regions: 'solid' });
     const want = (cx, cy) => (cy < 20 ? (cx < 30 ? 1 : 2) : (cx < 30 ? 3 : 1));
     let wrong = 0;
     b.debug.leaves.forEach((r, i) => { if (b.debug.labels[i] !== want((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)) wrong++; });

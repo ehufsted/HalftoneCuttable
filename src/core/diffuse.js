@@ -3,7 +3,7 @@
 // A cell cannot take any open fraction it likes: below the smallest cuttable hole
 // it is all-or-nothing, above the largest it saturates, and in a stack the deeper
 // layers are squeezed by the registration allowance. Each cell's shortfall is
-// handed to its unvisited neighbours, so the tone is right ON AVERAGE even where
+// handed to its unvisited neighbors, so the tone is right ON AVERAGE even where
 // no single cell can be. In the continuous part of the range the residual is only
 // rounding, so the pattern stays a clean grid there; the dithering shows up only
 // where a cell really cannot say what it was asked to.
@@ -16,7 +16,7 @@ const CLAMP = 0.5;   // bound on a carried error, so an unreachable region canno
  * @param {number} cols, rows, D
  * @param {Float32Array|Float64Array} target  cols*rows*D, what each cell is asked for
  * @param {(cell:number, want:Float64Array, got:Float64Array) => void} visit
- *   realise cell `cell` given the error-adjusted request `want`; write what was
+ *   realize cell `cell` given the error-adjusted request `want`; write what was
  *   actually achieved into `got`
  * @param {boolean} diffuse  false = each cell sees only its own target
  */
@@ -52,13 +52,13 @@ export function diffuseCells(cols, rows, D, target, visit, diffuse = true) {
 
 /**
  * The same idea on an irregular graph (the Voronoi web's cells): visit cells in
- * `order`, hand each one's shortfall to its not-yet-visited neighbours in
+ * `order`, hand each one's shortfall to its not-yet-visited neighbors in
  * proportion to the length of wall they share. `allow(i, j)` can refuse a
- * neighbour -- solid-colour regions keep their error to themselves, or a blue
+ * neighbor -- solid-color regions keep their error to themselves, or a blue
  * region's shortfall would bleed into the red one next to it as extra red.
  *
  * @param {Int32Array|number[]} order   cell indices, each once
- * @param {Array<Array<[number, number]>>} nbrs  per cell, [neighbour, weight]
+ * @param {Array<Array<[number, number]>>} nbrs  per cell, [neighbor, weight]
  */
 export function diffuseGraph(order, nbrs, D, target, visit, diffuse = true, allow = null) {
   const N = nbrs.length;

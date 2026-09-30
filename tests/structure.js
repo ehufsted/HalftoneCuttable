@@ -6,10 +6,10 @@
 // flood-fills the metal. One component, or it fails.
 //
 // And a NEGATIVE CONTROL, because a checker that can only say "one piece" proves
-// nothing: circles as wide as the pitch touch their neighbours, which traps a
+// nothing: circles as wide as the pitch touch their neighbors, which traps a
 // diamond of metal between every four -- the checker must see those islands.
 
-import { check, section, num, greyRamp, flatGrey, noiseRGBA, plain } from './runner.js';
+import { check, section, num, grayRamp, flatGray, noiseRGBA, plain } from './runner.js';
 import { prepare } from '../src/core/units.js';
 import { materialComponents, thinnestWeb } from '../src/core/structure.js';
 import method from '../src/methods/squareGrid.js';
@@ -21,8 +21,8 @@ export function run() {
   section('structure', `Flood fill of the metal at ${PX} px/mm (web = ${WEB} mm = 4 px); one piece per sheet, whatever the image.`);
 
   const images = {
-    white: flatGrey(200, 200, 255),
-    ramp: greyRamp(200, 200),
+    white: flatGray(200, 200, 255),
+    ramp: grayRamp(200, 200),
     noise: noiseRGBA(200, 200, 11, false),
   };
   const shapes = [['circle', 0], ['square', 0], ['square', 0.5], ['diamond', 0]];
@@ -58,7 +58,7 @@ export function run() {
   }
 
   {
-    const ctx = { ...prepare(flatGrey(100, 100, 255), { ...plain, widthMm: 24, pitch: 1.6, web: WEB }),
+    const ctx = { ...prepare(flatGray(100, 100, 255), { ...plain, widthMm: 24, pitch: 1.6, web: WEB }),
       shape: 'circle', rounding: 0 };
     const { spec } = method.limits(ctx);
     const sizes = new Float32Array(ctx.cols * ctx.rows).fill(ctx.pitch);   // illegal on purpose

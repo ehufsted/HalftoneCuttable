@@ -1,6 +1,6 @@
 // The hole model every method hands to the renderer, the stats and the SVG.
 //
-// A hole is described by its CUT PATH -- what the beam centre follows -- and the
+// A hole is described by its CUT PATH -- what the beam center follows -- and the
 // finished hole is that path grown by kerf/2 (the beam's radius). Three kinds:
 //
 //   {kind:'rsq', cx, cy, a, r, rot}  rounded square (circle when r = a/2;
@@ -24,7 +24,7 @@
 // the stencil scores from a raster instead (methods/stencil.js).
 
 import { cutPath, sdf, areaOf, perimeterOf } from './shapes.js';
-import { cellCentre } from './units.js';
+import { cellCenter } from './units.js';
 import { rsqPathData } from './cutpaths.js';
 import { insideGrown, polyArea, polyPerimeter } from './polygon.js';
 
@@ -35,11 +35,47 @@ export function gridHoles(ctx, sizes, spec) {
     for (let i = 0; i < ctx.cols; i++) {
       const g = cutPath(spec, sizes[j * ctx.cols + i]);
       if (!g) continue;
-      const [cx, cy] = cellCentre(ctx, i, j);
+      const [cx, cy] = cellCenter(ctx, i, j);
       out.push({ kind: 'rsq', cx, cy, a: g.a, r: g.r, rot: g.rot });
     }
   }
   return out;
+}
+
+/**
+ * Four fixed corner holes for registering stacked sheets: the same positions on
+ * every exported sheet (cut layers and the solid base alike), so a pin through
+ * each one after cutting holds every sheet in register. `dist` is clamped so the
+ * holes stay on the piece and never cross the center, whatever the piece size.
+ */
+export function alignmentHoles(widthMm, heightMm, dist, dia) {
+  const r = dia / 2;
+  if (!(r > 0)) return [];
+  const d = Math.max(r, Math.min(dist, widthMm / 2 - r, heightMm / 2 - r));
+  if (!(d >= r)) return [];
+  const out = [];
+  for (const cx of [d, widthMm - d]) {
+    for (const cy of [d, heightMm - d]) out.push({ kind: 'rsq', cx, cy, a: dia, r, rot: 0 });
+  }
+  return out;
+}
+
+/**
+ * A pattern's holes with every one touching the border band removed -- a plain
+ * margin `border` mm deep, kept blank all round the piece. Conservative: a hole
+ * is kept only when its own FINISHED extent (holeBBox, grown by `d` = kerf/2)
+ * lies entirely inside the inset rectangle, so nothing the beam actually cuts
+ * ever reaches into the border, even a hole whose nominal center is just inside
+ * it. `border <= 0` is a no-op (the common case, checked by the caller too).
+ */
+export function dropBorder(holes, widthMm, heightMm, border, d) {
+  if (!(border > 0)) return holes;
+  const eps = 1e-6;
+  const x0 = border, y0 = border, x1 = widthMm - border, y1 = heightMm - border;
+  return holes.filter((h) => {
+    const [a, b, c, e] = holeBBox(h, d);
+    return a >= x0 - eps && b >= y0 - eps && c <= x1 + eps && e <= y1 + eps;
+  });
 }
 
 /** A polygon (from polygon.js) as a hole. */

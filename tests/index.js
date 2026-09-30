@@ -8,6 +8,7 @@ import * as svg from './core.svg.js';
 import * as dxf from './core.dxf.js';
 import * as style from './core.style.js';
 import * as units from './core.units.js';
+import * as holes from './core.holes.js';
 import * as squareGrid from './method.squareGrid.js';
 import * as hexGrid from './method.hexGrid.js';
 import * as polygon from './core.polygon.js';
@@ -28,6 +29,7 @@ export const SECTIONS = [
   ['core.dxf', dxf],
   ['core.style', style],
   ['core.units', units],
+  ['core.holes', holes],
   ['core.polygon', polygon],
   ['core.voronoi', voronoi],
   ['method.squareGrid', squareGrid],

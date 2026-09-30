@@ -1,10 +1,10 @@
 // Square grid: one hole per cell, per cut layer, sized by the local tone.
 //
-// TONE MODEL. A cell's colour is the area-weighted mix of the sheets visible in it
+// TONE MODEL. A cell's color is the area-weighted mix of the sheets visible in it
 // (core/separate.js), and the open fraction of a hole is its finished area over
 // the cell area (core/shapes.js). The hole cannot exceed sMax = pitch - web, so
 // the top sheet always shows over at least 1 - fMax of every cell: pure white (in
-// B&W) or a pure base colour (in a stack) is unreachable by specification, not by
+// B&W) or a pure base color (in a stack) is unreachable by specification, not by
 // error. `targetImage` says so, and the app scores against it.
 //
 // Two ways into that band, the `range` param:
@@ -13,21 +13,21 @@
 //   clip    -- tones inside the band are kept as they are, only brighter ones
 //              saturate. More contrast, lost highlights.
 //
-// REALISATION, per cell, in serpentine error-diffusion order:
+// REALIZATION, per cell, in serpentine error-diffusion order:
 //   1. solve the target (plus carried error) for the closest palette mix;
 //   2. turn the mix into cumulative open fractions, one per cut layer;
 //   3. cut layer by layer from the top, each hole capped by the one above it less
 //      twice the registration allowance, and each one below the floor size
 //      rounded to nothing or to the floor, whichever is nearer;
-//   4. hand what could not be matched to the neighbours.
+//   4. hand what could not be matched to the neighbors.
 // Step 3 is greedy -- a deeper layer does not renegotiate the one above it -- and
 // diffusion is what keeps the average right when greed costs something.
 
 import { diffuseCells } from '../core/diffuse.js';
-import { solveMix, cumulativeOpen, visibleMix, mixColour, fitMix } from '../core/separate.js';
+import { solveMix, cumulativeOpen, visibleMix, mixColor, fitMix } from '../core/separate.js';
 import { maxSize, floorSize, openFraction, sizeFor } from '../core/shapes.js';
 import { prepare } from '../core/units.js';
-import { stackColours } from '../core/separate.js';
+import { stackColors } from '../core/separate.js';
 import { gridHoles } from '../core/holes.js';
 import { thinnestWeb } from '../core/structure.js';
 
@@ -37,7 +37,7 @@ export const blurb = 'One hole per cell, sized to the local tone. Every hole sta
 
 export const params = [
   { key: 'pitch', label: 'Cell pitch', type: 'range', min: 1, max: 20, step: 0.1, def: 4, unit: 'mm', dp: 1 },
-  { key: 'shape', label: 'Hole shape', type: 'select', def: 'circle',
+  { key: 'shape', label: 'Hole shape', type: 'select', def: 'square',
     options: [['circle', 'Circle'], ['square', 'Square'], ['diamond', 'Diamond']] },
   { key: 'rounding', label: 'Corner round', type: 'range', min: 0, max: 1, step: 0.05, def: 0,
     when: (p) => p.shape !== 'circle' },
@@ -70,7 +70,7 @@ export function targetImage(ctx) {
     for (let d = 0; d < D; d++) x[d] = ctx.target[i * D + d];
     solveMix(x, palette, m);
     fitMix(m, fMax, ctx.range);
-    mixColour(m, palette, c);
+    mixColor(m, palette, c);
     for (let d = 0; d < D; d++) out[i * D + d] = c[d];
   }
   return out;
@@ -113,7 +113,7 @@ export function run(ctx) {
       prev = s;
     }
     visibleMix(got, vis);
-    mixColour(vis, palette, out);
+    mixColor(vis, palette, out);
   }, ctx.diffuse !== false);
 
   let note = '';
@@ -128,7 +128,7 @@ export function build(rgba, settings, params) {
   const res = run(ctx);
   const { spec, sMax, sFloor, fMax, fFloor } = limits(ctx);
   const target = res.target;
-  const achieved = stackColours(ctx, res.sizes, spec);
+  const achieved = stackColors(ctx, res.sizes, spec);
   const N = ctx.cols * ctx.rows, D = ctx.D;
 
   // Cells that wanted a hole in the top sheet and could not have one, and cells

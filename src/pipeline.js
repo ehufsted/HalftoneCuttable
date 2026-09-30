@@ -15,6 +15,7 @@
 import { DEFAULTS, applyTone } from './core/units.js';
 import { rasterizeHoles, composite } from './core/render.js';
 import { layerStats } from './core/structure.js';
+import { alignmentHoles, dropBorder } from './core/holes.js';
 import { toEncoded, luminance, hexToLinear } from './core/color.js';
 import { byId } from './methods/index.js';
 import { applyStyle } from './core/style.js';
@@ -22,7 +23,7 @@ import { applyStyle } from './core/style.js';
 /**
  * @param {{width,height,data}} rgba
  * @param {object} settings   units.DEFAULTS plus: sheet, backdrop (B&W display
- *                            colours), speed (mm/s), pierce (s)
+ *                            colors), speed (mm/s), pierce (s)
  * @param {string} methodId
  * @param {object} params     the method's own
  * @param {{preview?:boolean, maxDim?:number}} opts  preview:false skips the rasters
@@ -55,23 +56,48 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
   const piece = {
     widthMm: b.widthMm, heightMm: b.heightMm, kerf: s.kerf, web: s.web,
     mode: b.mode, nCut: b.layers.length,
-    // each sheet's colour, top first -- for export names; the B&W sheet is the display colour
-    colours: b.mode === 'bw' ? [s.sheet || '#2b2b2b'] : s.palette.slice(0, b.layers.length + 1),
+    // each sheet's color, top first -- for export names; the B&W sheet is the display color
+    colors: b.mode === 'bw' ? [s.sheet || '#2b2b2b'] : s.palette.slice(0, b.layers.length + 1),
   };
   const machine = { speed: s.speed || 20, pierce: s.pierce ?? 0.3 };
+  // The blank border: every pattern hole reaching into it is dropped, layer by
+  // layer, before anything downstream (stats, preview, export) sees the layers.
+  // Removing holes only ever adds metal, so it cannot break the one-piece
+  // guarantee the method already made. This is a blunt, per-hole net for the
+  // per-cell methods (squareGrid, hexGrid, the cellWeb family, stipple), whose
+  // holes are each small and cell-bound; the stencil and the screen instead fold
+  // the border straight into their own raster's structural rim (see their
+  // build()), since one of their holes can be a loop spanning most of the sheet
+  // and dropping it whole over a graze would take far more than the border.
+  const layers = s.border > 0
+    ? b.layers.map((holes) => dropBorder(holes, b.widthMm, b.heightMm, s.border, s.kerf / 2))
+    : b.layers;
+  // Corner holes for registering the stack, the same on every sheet -- kept out
+  // of `layers` (the pattern's own holes, what the stats below score) and added
+  // in at export instead (app.js), the one place that also reaches the solid
+  // base sheet, which has no entry of its own in `layers`. The border never
+  // drops these: they are the one thing explicitly allowed inside it.
+  const align = s.alignHoles ? alignmentHoles(b.widthMm, b.heightMm, s.alignDist, s.alignDia) : [];
   const out = {
     piece,
-    layers: b.layers,
+    layers,
+    align,
     note: b.note || '',
     stats: {
       cells: N, cellsLabel: b.cellsLabel, dropped: b.dropped, saturated: b.saturated,
-      layers: b.layers.map((holes, j) => layerStats(piece, holes, b.webs[j], machine)),
+      // The stats charge for the alignment holes too -- they are really cut --
+      // but not for whatever the border dropped, which is really not.
+      layers: layers.map((holes, j) => layerStats(piece, holes.concat(align), b.webs[j], machine)),
       fidelity: fid / (N * D), reach: reach / (N * D),
     },
   };
   if (opts.preview === false) return out;
 
-  const pre = rasterizeHoles(piece, b.layers, { maxDim: opts.maxDim });
+  // The Result/backlit composites are physical views -- "as the stacked sheets
+  // look" -- and an alignment hole really is cut through every sheet, so it
+  // shows here as a plain through-hole too, not as a marker drawn over the top.
+  const withAlign = align.length ? layers.map((holes) => holes.concat(align)) : layers;
+  const pre = rasterizeHoles(piece, withAlign, { maxDim: opts.maxDim });
   const bw = b.mode === 'bw';
   const display = bw
     ? [hexToLinear(s.sheet || '#2b2b2b'), hexToLinear(s.backdrop || '#ffffff')]
@@ -86,7 +112,7 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
   return out;
 }
 
-/** The source image laid over the area it maps to, the rest in the top sheet's colour. */
+/** The source image laid over the area it maps to, the rest in the top sheet's color. */
 function sourcePreview(rgba, R, pre, borderLinear) {
   const { w, h, pxPerMm } = pre;
   const out = new Uint8ClampedArray(w * h * 4);

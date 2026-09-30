@@ -1,12 +1,12 @@
 // Facets: the low-poly triangles cut as holes, leaving a triangular web of metal.
 //
 // The same engine as the Voronoi web (methods/cellWeb.js) -- per-facet tone by
-// the inset margin, edges as clean breaks or metal lines, mixed or solid colour
+// the inset margin, edges as clean breaks or metal lines, mixed or solid color
 // regions, error diffusion, the web guarantee -- with a different LAYOUT: Delaunay
 // triangles over corners placed like the low-poly style's (core/lowpoly.js):
 //
 //   - the four corners and a ring along the border, so the facets tile the piece
-//   - corners ON the image's edges (and colour-region boundaries), pinned, so the
+//   - corners ON the image's edges (and color-region boundaries), pinned, so the
 //     triangle sides follow them: an edge is a crease between facets. (The
 //     Voronoi web pins seeds in PAIRS ACROSS an edge, to put a wall between them;
 //     for triangles the wall is the side joining two corners on the edge.)
@@ -31,7 +31,7 @@ export const id = 'facets';
 export const label = 'Facets';
 export const blurb = 'Low-poly triangles cut as holes, leaving a faceted web of metal. Facets shrink where the image is busy, and their sides follow its edges. Facet size is the size where the image is flat.';
 
-/** The Voronoi web's controls, with the size relabelled and defaulting larger. */
+/** The Voronoi web's controls, with the size relabeled and defaulting larger. */
 export const params = voronoiParams.map((p) => (p.key === 'pitch' ? { ...p, label: 'Facet size', def: 6 } : p));
 const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
 const MAX_CORNERS = 15000;          // Delaunay here is quadratic: ~3 s at the cap
@@ -105,7 +105,7 @@ export function facetLayout(c) {
   const cells = [], sx = new Float64Array(n), sy = new Float64Array(n);
   for (let t = 0; t < n; t++) {
     const a = tris[3 * t], b = tris[3 * t + 1], cc = tris[3 * t + 2];
-    // edge k runs vertex k -> k+1; its neighbour is the triangle opposite vertex k+2
+    // edge k runs vertex k -> k+1; its neighbor is the triangle opposite vertex k+2
     cells.push({ xs: [X[a], X[b], X[cc]], ys: [Y[a], Y[b], Y[cc]], lab: [nbr[3 * t + 2], nbr[3 * t], nbr[3 * t + 1]] });
     sx[t] = (X[a] + X[b] + X[cc]) / 3; sy[t] = (Y[a] + Y[b] + Y[cc]) / 3;
   }
@@ -132,7 +132,7 @@ export function facetLayout(c) {
     const x = Math.min(x1, Math.max(x0, xm)), y = Math.min(y1, Math.max(y0, ym));
     const i = Math.min(ww - 1, Math.max(0, Math.floor(x * kx))), j = Math.min(wh - 1, Math.max(0, Math.floor(y * ky)));
     if (owner[j * ww + i] >= 0) return owner[j * ww + i];
-    for (let r = 1; r < 4; r++) {                      // a pixel on a seam: a neighbour's facet
+    for (let r = 1; r < 4; r++) {                      // a pixel on a seam: a neighbor's facet
       for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
         const q = Math.min(wh - 1, Math.max(0, j + dj)) * ww + Math.min(ww - 1, Math.max(0, i + di));
         if (owner[q] >= 0) return owner[q];

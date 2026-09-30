@@ -8,7 +8,7 @@
 //
 // A hole is named by its NOMINAL SIZE `s`, its extent along the grid axis: the
 // diameter of a circle, the side of a square, the tip-to-tip diagonal of a
-// diamond. That is the quantity the web constraint is about (two neighbours along
+// diamond. That is the quantity the web constraint is about (two neighbors along
 // an axis leave `pitch - s` of metal between them), so `sMax = pitch - web` holds
 // for all three shapes. Rounding only ever shrinks the true extent below `s`, so
 // the constraint stays conservative.
@@ -41,7 +41,7 @@ export function finished(spec, s) {
   return { a, r, rot };
 }
 
-/** The path the beam centre follows: the finished hole offset inward by kerf/2. */
+/** The path the beam center follows: the finished hole offset inward by kerf/2. */
 export function cutPath(spec, s) {
   const g = finished(spec, s);
   if (!g) return null;
@@ -53,7 +53,7 @@ export function cutPath(spec, s) {
 export const areaOf = (g) => (g ? g.a * g.a - (4 - Math.PI) * g.r * g.r : 0);
 export const perimeterOf = (g) => (g ? 4 * (g.a - 2 * g.r) + 2 * Math.PI * g.r : 0);
 
-/** Extent along a grid axis -- what neighbouring holes and the web see. */
+/** Extent along a grid axis -- what neighboring holes and the web see. */
 export function extentOf(g) {
   if (!g) return 0;
   return g.rot ? g.a * SQRT2 - 2 * g.r * (SQRT2 - 1) : g.a;
@@ -62,7 +62,7 @@ export function extentOf(g) {
 /** Finished open area of nominal size `s`, as a fraction of a pitch-p cell. */
 export const openFraction = (spec, s, p) => areaOf(finished(spec, s)) / (p * p);
 
-/** Largest nominal size a cell can hold and still leave `web` to each neighbour. */
+/** Largest nominal size a cell can hold and still leave `web` to each neighbor. */
 export const maxSize = (p, web) => Math.max(0, p - web);
 
 /**
@@ -93,10 +93,10 @@ export function sizeFor(spec, f, p, sMax) {
 }
 
 /**
- * The rounded square's cut path as 8 key points, in LOCAL coordinates centred
+ * The rounded square's cut path as 8 key points, in LOCAL coordinates centered
  * on the hole (before rotation and translation): straight edge, corner, straight
  * edge, corner..., clockwise from the top edge. A point that starts an arc (to
- * the next point, wrapping at the end) carries that arc's centre as `cx`/`cy`;
+ * the next point, wrapping at the end) carries that arc's center as `cx`/`cy`;
  * a point without one is reached by a straight line. cutpaths.js (SVG) and
  * dxf.js (DXF) each rotate, translate and format these the same way for a
  * diamond; this is the one place the layout itself lives.
@@ -115,7 +115,7 @@ export function rsqCorners(g) {
 }
 
 /**
- * Signed distance from (x, y), relative to the hole centre, to the boundary of
+ * Signed distance from (x, y), relative to the hole center, to the boundary of
  * geometry g. Negative inside. The standard rounded-box distance.
  */
 export function sdf(g, x, y) {

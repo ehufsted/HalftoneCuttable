@@ -1,4 +1,4 @@
-// Colour separation for stacked sheets.
+// Color separation for stacked sheets.
 //
 // THE STACK. Sheets c0 (top) ... c(n-1) (solid base). Cut layer j has one hole per
 // cell with open fraction f_j, and the holes nest: f0 >= f1 >= ... >= f(n-2). Seen
@@ -6,10 +6,10 @@
 //
 //     c0 over 1 - f0,   c_j over f(j-1) - f_j,   c(n-1) over f(n-2)
 //
-// so a cell's colour is a CONVEX MIX of the sheet colours, with weights m_j that
+// so a cell's color is a CONVEX MIX of the sheet colors, with weights m_j that
 // are those visible areas. Any mix m on the simplex maps back to a unique nested
 // stack by f_j = m(j+1) + ... + m(n-1). Separation is therefore "find the mix of
-// the palette closest to the target colour", in linear light, where area mixing
+// the palette closest to the target color", in linear light, where area mixing
 // is actually linear.
 //
 // B&W is the n = 2, one-channel case of the same thing: palette [[0], [1]], sheet
@@ -19,12 +19,12 @@ import { mulberry32 } from '../shim/random.js';
 import { openFraction } from './shapes.js';
 
 /**
- * Every cell's colour from the holes actually chosen, by the exact area law.
+ * Every cell's color from the holes actually chosen, by the exact area law.
  * This is what the fidelity score compares with the target (see render.js for
  * why not a raster).
  * @returns {Float64Array} cols*rows*D, linear
  */
-export function stackColours(ctx, sizes, spec) {
+export function stackColors(ctx, sizes, spec) {
   const N = ctx.cols * ctx.rows, D = ctx.D;
   const out = new Float64Array(N * D);
   const f = new Float64Array(sizes.length);
@@ -32,7 +32,7 @@ export function stackColours(ctx, sizes, spec) {
   const col = new Float64Array(D);
   for (let c = 0; c < N; c++) {
     for (let j = 0; j < sizes.length; j++) f[j] = openFraction(spec, sizes[j][c], ctx.pitch);
-    mixColour(visibleMix(f, vis), ctx.palette, col);
+    mixColor(visibleMix(f, vis), ctx.palette, col);
     for (let d = 0; d < D; d++) out[c * D + d] = col[d];
   }
   return out;
@@ -44,7 +44,7 @@ export function stackColours(ctx, sizes, spec) {
  * feasible one kept -- exact, no iteration, no tolerance to tune.
  *
  * @param {ArrayLike<number>} x         target, length D
- * @param {number[][]} palette           n colours, each length D
+ * @param {number[][]} palette           n colors, each length D
  * @param {Float64Array} [out]           length n, reused to avoid allocation
  * @returns {Float64Array} the weights m
  */
@@ -72,7 +72,7 @@ export function solveMix(x, palette, out = new Float64Array(palette.length)) {
       for (const i of idx) out[i] = Math.max(0, m[i]);
     }
   }
-  // Renormalise away the clamp of tiny negatives.
+  // Renormalize away the clamp of tiny negatives.
   let sum = 0;
   for (let i = 0; i < n; i++) sum += out[i];
   if (sum > 0) for (let i = 0; i < n; i++) out[i] /= sum;
@@ -82,7 +82,7 @@ export function solveMix(x, palette, out = new Float64Array(palette.length)) {
 
 /**
  * Least squares on the affine hull of palette[idx]: m_b = 1 - sum(others).
- * Writes m[idx]; returns false if the face is degenerate (colours affinely
+ * Writes m[idx]; returns false if the face is degenerate (colors affinely
  * dependent), in which case a smaller face covers the same answer.
  */
 function faceSolve(x, palette, idx, m, D) {
@@ -130,7 +130,7 @@ function faceSolve(x, palette, idx, m, D) {
 
 /**
  * Bring a mix into the reachable band: the top sheet must cover at least
- * 1 - fMax. Written on the MIX rather than the colour, so B&W and a stack are one
+ * 1 - fMax. Written on the MIX rather than the color, so B&W and a stack are one
  * rule: in B&W it is exactly t -> fMax * t (squeeze) or min(t, fMax) (clip).
  */
 export function fitMix(m, fMax, range) {
@@ -147,8 +147,8 @@ export function fitMix(m, fMax, range) {
   return m;
 }
 
-/** The colour a mix produces. */
-export function mixColour(m, palette, out = new Float64Array(palette[0].length)) {
+/** The color a mix produces. */
+export function mixColor(m, palette, out = new Float64Array(palette[0].length)) {
   out.fill(0);
   for (let i = 0; i < palette.length; i++) {
     for (let d = 0; d < out.length; d++) out[d] += m[i] * palette[i][d];
@@ -183,7 +183,7 @@ export function visibleMix(f, out = new Float64Array(f.length + 1)) {
  * Shared by `suggestPalette` (encoded RGB, then pushed for gamut) and Posterize's
  * palette extraction (a perceptual space, used as-is).
  * @param {(r:number, g:number, b:number) => number[]} toPoint  encoded [0,1] in
- * @returns {{centres:number[][], mass:number[], mean:number[]}}
+ * @returns {{centers:number[][], mass:number[], mean:number[]}}
  */
 export function kmeansPoints(rgba, n, seed, toPoint) {
   const total = rgba.width * rgba.height;
@@ -202,51 +202,51 @@ export function kmeansPoints(rgba, n, seed, toPoint) {
   const d2 = (a, b) => { let s = 0; for (let d = 0; d < D; d++) s += (a[d] - b[d]) ** 2; return s; };
 
   // k-means++ seeding
-  const centres = [pts[Math.floor(rand() * N)].slice()];
+  const centers = [pts[Math.floor(rand() * N)].slice()];
   const dist = new Float64Array(N).fill(Infinity);
-  while (centres.length < n) {
-    const c = centres[centres.length - 1];
+  while (centers.length < n) {
+    const c = centers[centers.length - 1];
     let sum = 0;
     for (let i = 0; i < N; i++) { dist[i] = Math.min(dist[i], d2(pts[i], c)); sum += dist[i]; }
     let t = rand() * sum, pick = N - 1;
     for (let i = 0; i < N; i++) { t -= dist[i]; if (t <= 0) { pick = i; break; } }
-    centres.push(pts[pick].slice());
+    centers.push(pts[pick].slice());
   }
 
   const label = new Int32Array(N);
   const mass = new Float64Array(n);
   for (let it = 0; it < 25; it++) {
-    const acc = centres.map(() => new Array(D).fill(0));
+    const acc = centers.map(() => new Array(D).fill(0));
     mass.fill(0);
     for (let i = 0; i < N; i++) {
       let bi = 0, bd = Infinity;
-      for (let k = 0; k < n; k++) { const dd = d2(pts[i], centres[k]); if (dd < bd) { bd = dd; bi = k; } }
+      for (let k = 0; k < n; k++) { const dd = d2(pts[i], centers[k]); if (dd < bd) { bd = dd; bi = k; } }
       label[i] = bi; mass[bi]++;
       for (let d = 0; d < D; d++) acc[bi][d] += pts[i][d];
     }
     for (let k = 0; k < n; k++) {
-      if (mass[k] > 0) centres[k] = acc[k].map((v) => v / mass[k]);
+      if (mass[k] > 0) centers[k] = acc[k].map((v) => v / mass[k]);
     }
   }
-  return { centres, mass: Array.from(mass), mean };
+  return { centers, mass: Array.from(mass), mean };
 }
 
 /**
- * Suggest `n` sheet colours for an image: k-means in ENCODED sRGB (closer to
+ * Suggest `n` sheet colors for an image: k-means in ENCODED sRGB (closer to
  * perceptual than linear, and this is a starting point for a person to edit),
  * seeded so the same image always suggests the same palette.
  *
- * Cluster centres sit inside the image's colour hull, and the stack can only
- * reach mixes inside the PALETTE's hull, so the centres are pushed 25% away from
- * the image's mean colour before being returned. Ordered by cluster size, largest
- * on top: the base shows only through every hole in the stack, so the colour
+ * Cluster centers sit inside the image's color hull, and the stack can only
+ * reach mixes inside the PALETTE's hull, so the centers are pushed 25% away from
+ * the image's mean color before being returned. Ordered by cluster size, largest
+ * on top: the base shows only through every hole in the stack, so the color
  * the image needs least is the one that should live there.
  *
  * @returns {string[]} '#rrggbb', top sheet first
  */
 export function suggestPalette(rgba, n, seed = 1) {
-  const { centres, mass, mean } = kmeansPoints(rgba, n, seed, (r, g, b) => [r, g, b]);
-  const out = centres.map((c, k) => ({
+  const { centers, mass, mean } = kmeansPoints(rgba, n, seed, (r, g, b) => [r, g, b]);
+  const out = centers.map((c, k) => ({
     mass: mass[k],
     rgb: c.map((v, d) => Math.max(0, Math.min(1, mean[d] + 1.25 * (v - mean[d])))),
   }));

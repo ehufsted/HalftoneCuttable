@@ -8,8 +8,8 @@ Two modes:
 
 - **Black & white:** one sheet. Cut-away metal reads as white, whether held up to
   a light or set in front of a pale background.
-- **Stacked colour:** 2–4 sheets. The top sheets are cut and the bottom one stays
-  solid. Each cell's holes are nested, so a cell shows a mix of the sheet colours.
+- **Stacked color:** 2–4 sheets. The top sheets are cut and the bottom one stays
+  solid. Each cell's holes are nested, so a cell shows a mix of the sheet colors.
   For example, a red sheet with holes over a white sheet with smaller holes, over a
   black base.
 
@@ -26,34 +26,34 @@ Seven patterns:
   - **Edges:** *Ignore*; *Clean breaks* (a cell wall lies on each image edge, so no
     cell straddles one); or *Metal lines* (those walls get extra width and read as
     drawn lines).
-  - **Colour regions** (stacked mode): *Mixed colours* (any blend of sheets in a cell,
-    through nested holes); or *Solid colours* (the image is split into regions by
+  - **Color regions** (stacked mode): *Mixed colors* (any blend of sheets in a cell,
+    through nested holes); or *Solid colors* (the image is split into regions by
     sheet, each cell shows the top sheet and one other, and region boundaries are
     walls, like stained glass).
 
   Its cell size (under Pattern) is the size in flat areas of the image.
 - **Facets:** low-poly triangles cut as holes, leaving a faceted web of metal. It
-  has the Voronoi web's controls (edges as clean breaks or metal lines, colour
+  has the Voronoi web's controls (edges as clean breaks or metal lines, color
   regions, detail refine...) and the same guarantees. Triangles hold less hole than
   Voronoi cells, so facets default larger (6 mm).
 - **Rectangles:** a Mondrian-like composition. Straight cuts divide the piece, each
   one placed where it best separates the image, until there are as many rectangles as
-  you ask for (no smaller than *Smallest side*). With *Flat colour* each rectangle
-  opens fully onto its sheet colour, so the rectangles become flat blocks of the
-  chosen sheet colours, with the top sheet as the lines. *Narrower with each cut*
+  you ask for (no smaller than *Smallest side*). With *Flat color* each rectangle
+  opens fully onto its sheet color, so the rectangles become flat blocks of the
+  chosen sheet colors, with the top sheet as the lines. *Narrower with each cut*
   makes the first cuts *Cut width* wide and thins the later ones down to the min web.
   The outline frame is as bold as the first cut. *By tone* sizes each hole by the
   image instead.
 - **Stipple:** every hole is the same size, and tone comes from how densely they are
   packed, in an even blue-noise scatter never closer than the min web. One hole size
-  means one pierce and one set of cut settings everywhere. In colour, each dot shows
-  one sheet, so colours mix by the proportion of dots, like pointillism.
+  means one pierce and one set of cut settings everywhere. In color, each dot shows
+  one sheet, so colors mix by the proportion of dots, like pointillism.
 - **Stencil:** the image as solid shapes, cut out whole, for logos, text and
   silhouettes. Metal that would fall out (the middle of an O) is held by bridges,
   in an *Automatic*, *Horizontal* or *Vertical* style. *Allow floating parts* skips
   the bridges and cuts those parts free to glue down. Slots too narrow to cut are
   filled, and metal thinner than the min web is thickened rather than lost. In
-  colour, each sheet is cut by palette region. *Halftone inside shapes* fills each
+  color, each sheet is cut by palette region. *Halftone inside shapes* fills each
   shape with round holes sized by its tone, instead of cutting it out whole.
 - **Screen:** the image compared against a repeating pattern: straight or wavy lines
   (engraving), concentric rings, a spiral, or a Turing labyrinth (spots in the
@@ -70,7 +70,7 @@ A **Style** section of filters, applied to the image before any pattern, so ever
 pattern can use them. Tick a filter to use it; they run top to bottom, and ↑ ↓
 change the order.
 
-**Blur (Gaussian)** softens the image with a plain Gaussian blur, in millimetres
+**Blur (Gaussian)** softens the image with a plain Gaussian blur, in millimeters
 on the piece, replacing fine grain and noise with an even gradient before any
 pattern or other filter reads it.
 
@@ -80,26 +80,26 @@ before a pattern's own tone band compresses it further. *Tile size* sets how
 local; *Contrast limit* caps how far a tile can be stretched, so a truly flat or
 grainy one is not blown into noise.
 
-**Posterize** reduces the image to a palette of colours pulled from it (clustered
-the way the eye groups colours) and paints every pixel with its nearest one, like
-a screen-print poster. *Palette colours* sets how many; *Shape cleanup* removes
-small islands and fills small notches at each colour's edge, so a fleck of grain
-does not turn into a shape of its own; *Seed* nudges the clustering if two colours
+**Posterize** reduces the image to a palette of colors pulled from it (clustered
+the way the eye groups colors) and paints every pixel with its nearest one, like
+a screen-print poster. *Palette colors* sets how many; *Shape cleanup* removes
+small islands and fills small notches at each color's edge, so a fleck of grain
+does not turn into a shape of its own; *Seed* nudges the clustering if two colors
 come out too close together.
 
 **Painterly (Kuwahara)** flattens the image into even, brush-like patches with crisp
-edges, stretched along the form (brush size in millimetres). It calms grain and noise
+edges, stretched along the form (brush size in millimeters). It calms grain and noise
 for every pattern.
 
 **Low-poly facets** turns the image into flat triangles. *Adaptive* makes them
 smaller where the image is busy and lays their sides along its strong edges;
-*uniform* is an even triangle grid. A facet's colour is its average (which keeps the
+*uniform* is an even triangle grid. A facet's color is its average (which keeps the
 tone) or its median (which ignores specks).
 
 **Ink lines (XDoG)** turns the image into a pen-and-ink drawing. *Lines only* makes the drawing the image; through the Stencil it becomes a
 cut line drawing. *Lines over image* darkens the photo along its edges, which fine
 patterns cut as dark lines (coarse ones average thin lines into their tone). Line
-scale is in millimetres on the metal. *Follow edges* smooths the lines along the
+scale is in millimeters on the metal. *Follow edges* smooths the lines along the
 image's direction, so they come out as long strokes rather than dashes.
 
 ## Running it
@@ -124,11 +124,11 @@ then open:
 | Min web | Thinnest metal left anywhere, including between an edge hole and the outline. About the sheet thickness is a safe start. |
 | Min hole | Smallest finished hole worth cutting. Cells that want less than this are dithered between no hole and this size. It is raised to 1.5× the kerf if it is below that. |
 | Kerf | Beam width. The exported paths are **already offset** by it, so turn kerf compensation off in your laser software. |
-| Registration | Colour mode only. Each deeper hole is this much smaller on every side than the one above it, so small misalignment when stacking doesn't show. |
+| Registration | Color mode only. Each deeper hole is this much smaller on every side than the one above it, so small misalignment when stacking doesn't show. |
 
 ## Export
 
-One file per sheet, as **SVG** or **DXF**, in true millimetres, with every path closed
+One file per sheet, as **SVG** or **DXF**, in true millimeters, with every path closed
 and already offset for the kerf, so turn kerf compensation off in your laser
 software.
 
@@ -137,9 +137,9 @@ software.
   sheet until its holes are done. Within the holes, innermost contours come first.
 - **DXF details:** DXF is AutoCAD R12, the version laser and CAM software imports
   most reliably. Circles are true `CIRCLE`s, and rounded corners are exact arcs. R12
-  has no units field: the file carries a millimetre hint that most software reads,
-  and if yours still asks, the units are millimetres.
-- **File names:** DXF names end in the sheet's colour, e.g. `rhino-1-top-eae8e7.dxf`.
+  has no units field: the file carries a millimeter hint that most software reads,
+  and if yours still asks, the units are millimeters.
+- **File names:** DXF names end in the sheet's color, e.g. `rhino-1-top-eae8e7.dxf`.
   SVG names don't, e.g. `rhino-1-top.svg`.
 - **Solid base:** the base sheet's file is its outline alone.
 
@@ -155,7 +155,7 @@ src/
   worker.js     runs pipeline.js off the main thread
   pipeline.js   settings + pixels -> holes, previews, scores
   shim/         image resize/blur (copied from HalftoneWebPAL-1), seeded RNG
-  core/         units, shapes, colour, separation, diffusion, render, cut paths, SVG, structure
+  core/         units, shapes, color, separation, diffusion, render, cut paths, SVG, structure
   methods/      one module per pattern (squareGrid)
 tests/          one module per area; runner.js has no DOM, report.js paints
 docs/architecture.md   the invariants, read before changing core/

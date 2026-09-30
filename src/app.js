@@ -13,7 +13,7 @@ import { generateSample } from './app/samples.js';
 
 const $ = (id) => document.getElementById(id);
 
-/** Starting colours per stack height, top sheet first, base last. */
+/** Starting colors per stack height, top sheet first, base last. */
 const DEFAULT_PALETTES = {
   2: ['#c8102e', '#1a1a1a'],
   3: ['#f2f2f2', '#c8102e', '#1a1a1a'],
@@ -23,8 +23,8 @@ const DEFAULT_PALETTES = {
 const state = {
   rgbaColor: null,    // {width,height,data} the source as loaded
   rgbaGray: null,     // what B&W reads: the same image, except the procedural
-                      // samples, whose colour version is a hue sweep that would
-                      // wreck a grey ramp
+                      // samples, whose color version is a hue sweep that would
+                      // wreck a gray ramp
   imageName: 'piece',
   methodId: METHODS[0].id,
   params: defaultsFor(METHODS[0]),
@@ -105,6 +105,10 @@ function readSettings() {
     minHole: num('minHole'),
     kerf: num('kerf'),
     reg: num('reg'),
+    border: num('border'),
+    alignHoles: $('alignHoles').checked,
+    alignDist: num('alignDist'),
+    alignDia: num('alignDia'),
     gamma: num('gamma'),
     brightness: num('brightness'),
     saturation: num('saturation'),
@@ -122,7 +126,8 @@ function readSettings() {
 
 /** Catch settings the pipeline would reject, and say why here rather than as an error. */
 function validate(s) {
-  if (![s.widthMm, s.web, s.minHole, s.kerf, s.speed, s.pierce].every(isFinite)) return 'fill in every machine field';
+  if (![s.widthMm, s.web, s.minHole, s.kerf, s.border, s.speed, s.pierce].every(isFinite)) return 'fill in every machine field';
+  if (s.alignHoles && ![s.alignDist, s.alignDia].every(isFinite)) return 'fill in the alignment hole fields';
   const pitch = state.params.pitch;       // only the patterns built on cells have one
   if (pitch === undefined) return '';
   if (pitch <= s.web) return 'cell size must be larger than the min web';
@@ -164,7 +169,7 @@ function suggest() {
   if (!worker) return;
   state.jobId++;
   state.pending = true;
-  setStatus('suggesting colours…');
+  setStatus('suggesting colors…');
   // Suggest from what the method will actually see: Tone and then the Style
   // chain restyle the image first, same as a run (see runPipeline).
   worker.postMessage({
@@ -180,7 +185,7 @@ function updateGridNote(s, rgba) {
     const how = state.methodId === 'stipple' ? 'dots keep at least one min web apart'
       : state.methodId === 'stencil' ? 'shapes are cut whole; metal thinner than the min web is thickened'
       : state.methodId === 'screen' ? 'slots are tied and bridged; metal thinner than the min web is thickened'
-      : state.methodId === 'rectangles' ? 'straight cuts placed by the image, into flat blocks of the sheet colours'
+      : state.methodId === 'rectangles' ? 'straight cuts placed by the image, into flat blocks of the sheet colors'
       : `cells about ${fmtMm(pitch)} mm where the image is flat, smaller where it is detailed`;
     $('gridNote').innerHTML = isFinite(H) ? `piece <b>${fmtMm(s.widthMm)} × ${fmtMm(H)} mm</b> · ${how}` : '';
     return;
@@ -263,7 +268,10 @@ function paintCut(ctx, res) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, pv.w, pv.h);
   const li = parseInt($('cutLayer').value || '0', 10);
-  const holes = res.layers[li] || [];
+  // Every sheet gets the alignment holes too, including the solid base (li
+  // beyond layers.length, which has no pattern holes of its own) -- same as
+  // exportLayer.
+  const holes = (res.layers[li] || []).concat(res.align || []);
   ctx.save();
   ctx.scale(k, k);
   ctx.lineWidth = Math.max(0.6 / k, 0.02);
@@ -390,13 +398,15 @@ function sheetNamesFor(n) {
     i === 0 ? 'Top sheet' : i === n - 1 ? 'Base (solid)' : `Sheet ${i + 1}`);
 }
 
-/** SVG names as before; DXF names carry the sheet's hex colour. */
+/** SVG names as before; DXF names carry the sheet's hex color. */
 const layerFileName = (i, ext = 'svg') => sheetFileName(state.imageName, i, state.result.piece, ext, ext === 'dxf');
 
 function exportLayer(i, ext = 'svg') {
   const res = state.result;
   if (!res) return;
-  const holes = res.layers[i] || [];
+  // Every exported sheet gets the alignment holes too, including the solid base
+  // (index >= layers.length, which has no pattern holes of its own).
+  const holes = (res.layers[i] || []).concat(res.align || []);
   const name = layerFileName(i, ext);
   if (ext === 'dxf') downloadFile(layerDXF(res.piece, holes).text, name, 'application/dxf');
   else downloadSVG(layerSVG(res.piece, holes, { name }).text, name);
@@ -489,8 +499,8 @@ function loadPreset(kind, fallback = null) {
 
 /** A procedural sample, when a bundled preset photo fails to load (src/app/samples.js). */
 function sample(kind) {
-  const { colour, grey } = generateSample(kind);
-  setImage(colour, grey, `sample-${kind}`);
+  const { color, gray } = generateSample(kind);
+  setImage(color, gray, `sample-${kind}`);
 }
 
 // ------------------------------------------------------------------ params
@@ -522,7 +532,7 @@ function renderParams(host, defs, values, prefix, rebuild) {
   }
 }
 
-/** A checkbox param: a single labelled toggle. */
+/** A checkbox param: a single labeled toggle. */
 function renderCheckboxParam(p, id, values, rebuild) {
   const lab = document.createElement('label');
   lab.className = 'check';
@@ -537,7 +547,7 @@ function renderCheckboxParam(p, id, values, rebuild) {
   return lab;
 }
 
-/** A select param: a labelled dropdown. */
+/** A select param: a labeled dropdown. */
 function renderSelectParam(p, id, values, rebuild) {
   const row = document.createElement('div');
   row.className = 'row';
@@ -553,7 +563,7 @@ function renderSelectParam(p, id, values, rebuild) {
   return row;
 }
 
-/** A numeric param: a labelled slider with its live value shown alongside. */
+/** A numeric param: a labeled slider with its live value shown alongside. */
 function renderRangeParam(p, id, values, rebuild) {
   const row = document.createElement('div');
   row.className = 'row';
@@ -664,7 +674,7 @@ function init() {
   loadPreset('rhino', 'sphere');
 }
 
-/** Method and mode: switching patterns, B&W/colour, sheet count, the palette suggester. */
+/** Method and mode: switching patterns, B&W/color, sheet count, the palette suggester. */
 function wireModeControls() {
   $('method').addEventListener('change', () => {
     const prevMethod = state.methodId;
@@ -705,11 +715,15 @@ function wireImageControls() {
   buildStyleUI();
 }
 
-/** Cutter and material settings, and the sheet/backdrop colour swatches. */
+/** Cutter and material settings, and the sheet/backdrop color swatches. */
 function wireMachineControls() {
-  for (const id of ['widthMm', 'web', 'minHole', 'kerf', 'reg', 'speed', 'pierce']) {
+  for (const id of ['widthMm', 'web', 'minHole', 'kerf', 'reg', 'border', 'speed', 'pierce', 'alignDist', 'alignDia']) {
     $(id).addEventListener('input', () => scheduleRun(400));
   }
+  $('alignHoles').addEventListener('change', () => {
+    $('alignFields').hidden = !$('alignHoles').checked;
+    scheduleRun();
+  });
   for (const id of ['sheetColor', 'backdropColor']) {
     const input = $(id);
     const hex = input.parentElement.querySelector('.hex');

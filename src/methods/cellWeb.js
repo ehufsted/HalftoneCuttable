@@ -2,8 +2,8 @@
 // each cut as a hole inset from its walls, its margin solved per cell for tone.
 //
 // Everything but WHERE the cells are: reading the image, the detail and edge
-// features, colour regions, the per-cell tone law, targets, error diffusion over
-// the cell graph, the stacked-colour modes, the web figures. The reasoning for all
+// features, color regions, the per-cell tone law, targets, error diffusion over
+// the cell graph, the stacked-color modes, the web figures. The reasoning for all
 // of it is in voronoiWeb.js's header; this code was that file's before it was shared.
 //
 // A LAYOUT places the cells. It is called with
@@ -19,12 +19,12 @@
 // layout whose cells are large but whose cut positions need to be fine.
 //
 // P.fill === 'flat' (a method may offer it) opens every cell as far as IT can onto
-// its colour instead of sizing its hole by tone -- each to its own web limit, not
+// its color instead of sizing its hole by tone -- each to its own web limit, not
 // to the shared tone band, so a large cell is not held back by the small ones:
 // solid regions become flat blocks of their sheet, and a mixed cell shows its
-// colour at full saturation. Nothing is left over to diffuse.
-// cells[i] is a convex polygon (core/polygon.js) whose edge k is labelled with the
-// neighbouring cell (-1 on the rectangle); sites a representative point per cell
+// color at full saturation. Nothing is left over to diffuse.
+// cells[i] is a convex polygon (core/polygon.js) whose edge k is labeled with the
+// neighboring cell (-1 on the rectangle); sites a representative point per cell
 // (for the diffusion order and the empty-cell fallback); isLine says whether the
 // wall between i and q (i's edge k) lies along an image edge, for Metal lines.
 //
@@ -35,7 +35,7 @@
 import { linearPlanes, prepareRaster } from '../core/units.js';
 import { resize, makeImage } from '../shim/image.js';
 import { toEncoded, encodeFast, luminance } from '../core/color.js';
-import { solveMix, fitMix, mixColour, cumulativeOpen, visibleMix } from '../core/separate.js';
+import { solveMix, fitMix, mixColor, cumulativeOpen, visibleMix } from '../core/separate.js';
 import { insetConvex, minWidth, grownArea, polyArea } from '../core/polygon.js';
 import { detailMap, edgePoints, regionLabels, boundaryPoints } from '../core/features.js';
 import { diffuseGraph } from '../core/diffuse.js';
@@ -126,7 +126,7 @@ export function buildCellWeb(rgba, settings, params, DEF, layout, opts = {}) {
     for (let i = 0; i < ww; i++) addPixel(L.cellOfPixel(i, j), j * ww + i);
   }
   for (let c = 0; c < N; c++) {
-    if (cnt[c] === 0) {           // a sliver no pixel centre fell in: use the pixel under its site
+    if (cnt[c] === 0) {           // a sliver no pixel center fell in: use the pixel under its site
       const i = Math.min(ww - 1, Math.floor(sites.xs[c] * kx)), j = Math.min(wh - 1, Math.floor(sites.ys[c] * ky));
       addPixel(c, j * ww + i);
     }
@@ -213,13 +213,13 @@ export function buildCellWeb(rgba, settings, params, DEF, layout, opts = {}) {
       if (!solid) {
         solveMix(x, palette, m);
         if (flat) {
-          // the colour at full strength: the top sheet only where the web forces it
+          // the color at full strength: the top sheet only where the web forces it
           const rest = 1 - m[0], fm = fMaxCell[i];
           if (rest > 1e-6) { for (let k = 1; k < n; k++) m[k] *= fm / rest; m[0] = 1 - fm; }
         } else {
           fitMix(m, fMaxG, P.range);
         }
-        mixColour(m, palette, col);
+        mixColor(m, palette, col);
         for (let d = 0; d < D; d++) target[i * D + d] = col[d];
         continue;
       }
@@ -234,7 +234,7 @@ export function buildCellWeb(rgba, settings, params, DEF, layout, opts = {}) {
     }
   }
 
-  // ---- realise, cell by cell, in serpentine bands
+  // ---- realize, cell by cell, in serpentine bands
   const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => {
     const ba = Math.floor(sites.ys[a] / sMax), bb = Math.floor(sites.ys[b] / sMax);
     if (ba !== bb) return ba - bb;
@@ -270,7 +270,7 @@ export function buildCellWeb(rgba, settings, params, DEF, layout, opts = {}) {
   };
   const finishCell = (i) => {
     visibleMix(got, vis);
-    mixColour(vis, palette, col);
+    mixColor(vis, palette, col);
     for (let d = 0; d < D; d++) achieved[i * D + d] = col[d];
   };
   /** Solid mode: only the top hole is a window, onto the region's sheet. */
@@ -347,7 +347,7 @@ export function buildCellWeb(rgba, settings, params, DEF, layout, opts = {}) {
   };
 }
 
-/** The top sheet's share of cell i's target colour (1 minus what layer 0 must open). */
+/** The top sheet's share of cell i's target color (1 minus what layer 0 must open). */
 function topShare(target, i, D, palette, m) {
   const x = new Float64Array(D);
   for (let d = 0; d < D; d++) x[d] = target[i * D + d];

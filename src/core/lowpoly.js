@@ -9,14 +9,14 @@
 //             ALONG the image's strong edges first, so triangle sides line up
 //             with the outlines and a jaw or horizon is a crease between facets
 //             rather than cutting through them. Points on an edge (not in pairs
-//             across it, as the Voronoi web needs): Delaunay joins neighbours
+//             across it, as the Voronoi web needs): Delaunay joins neighbors
 //             along the line.
 //   uniform   an equilateral triangle grid: every facet the same size.
 //
 // Both add the piece's corners and a ring along its border, so the facets tile
 // the whole rectangle, and are triangulated by Delaunay (core/delaunay.js).
 //
-// A facet's colour is the AVERAGE of its pixels, taken in linear light (so a
+// A facet's color is the AVERAGE of its pixels, taken in linear light (so a
 // facet keeps the tone the patterns downstream will reproduce), or their MEDIAN,
 // channel by channel, which ignores specks and outliers and gives more contrast.
 //
@@ -107,14 +107,14 @@ export function lowPolyMesh(rgba, p, widthMm) {
 }
 
 /**
- * The low-poly image: every pixel takes its facet's colour.
- * @param {{layout, size, detail, edges, edgeThreshold, colour, seed}} p
+ * The low-poly image: every pixel takes its facet's color.
+ * @param {{layout, size, detail, edges, edgeThreshold, color, seed}} p
  */
 export function lowPoly(rgba, p, widthMm) {
   const W = rgba.width, H = rgba.height, src = rgba.data;
   const { xs, ys, tris, n } = lowPolyMesh(rgba, p, widthMm);
   const owner = new Int32Array(W * H).fill(-1);
-  // assign pixels by their centres; shared edges are inclusive, so nothing falls
+  // assign pixels by their centers; shared edges are inclusive, so nothing falls
   // through a crack between two facets (a pixel on an edge goes to the later one)
   for (let t = 0; t < n; t++) {
     const a = tris[3 * t], b = tris[3 * t + 1], c = tris[3 * t + 2];
@@ -133,11 +133,11 @@ export function lowPoly(rgba, p, widthMm) {
       }
     }
   }
-  // any pixel still unowned (only possible at the outermost rim) takes a neighbour's facet
+  // any pixel still unowned (only possible at the outermost rim) takes a neighbor's facet
   for (let i = 0; i < W * H; i++) if (owner[i] < 0) owner[i] = owner[i > 0 ? i - 1 : i + 1] >= 0 ? owner[i > 0 ? i - 1 : i + 1] : 0;
 
   const cols = new Uint8ClampedArray(n * 3);
-  if (p.colour === 'median') {
+  if (p.color === 'median') {
     // group the pixels by facet (a counting sort), then one reused 256-bin
     // histogram per channel per facet -- a histogram per facet at once would be
     // hundreds of megabytes at the point cap

@@ -44,20 +44,20 @@ export function makeRGBA(w, h, fn) {
   return { width: w, height: h, data };
 }
 
-/** Grey ramp, black at the left, white at the right. */
-export const greyRamp = (w, h) => makeRGBA(w, h, (x) => {
+/** Gray ramp, black at the left, white at the right. */
+export const grayRamp = (w, h) => makeRGBA(w, h, (x) => {
   const v = Math.round((255 * x) / (w - 1));
   return [v, v, v];
 });
 
-export const flatGrey = (w, h, v) => makeRGBA(w, h, () => [v, v, v]);
+export const flatGray = (w, h, v) => makeRGBA(w, h, () => [v, v, v]);
 
-/** Seeded per-pixel noise, in colour or grey. */
-export function noiseRGBA(w, h, seed, colour = true) {
+/** Seeded per-pixel noise, in color or gray. */
+export function noiseRGBA(w, h, seed, color = true) {
   const rand = mulberry32(seed);
   return makeRGBA(w, h, () => {
     const r = rand() * 255;
-    return colour ? [r, rand() * 255, rand() * 255] : [r, r, r];
+    return color ? [r, rand() * 255, rand() * 255] : [r, r, r];
   });
 }
 

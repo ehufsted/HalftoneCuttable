@@ -1,7 +1,7 @@
 // core/units.js: the cell grid's margin invariant, and applyTone's gamma,
 // brightness and saturation.
 
-import { check, section, flatGrey, makeRGBA, plain } from './runner.js';
+import { check, section, flatGray, makeRGBA, plain } from './runner.js';
 import { prepare, applyTone } from '../src/core/units.js';
 import { luminance, toLinear } from '../src/core/color.js';
 
@@ -11,7 +11,7 @@ export function run() {
   {
     // A piece wide enough for several cells: the margin invariant holds with room
     // to spare, and prepare() succeeds as before.
-    const ctx = prepare(flatGrey(10, 10, 128), { ...plain, widthMm: 24, pitch: 1.6, web: 0.2 });
+    const ctx = prepare(flatGray(10, 10, 128), { ...plain, widthMm: 24, pitch: 1.6, web: 0.2 });
     check('a piece with room for several cells succeeds', ctx.cols >= 1,
       `${ctx.cols} cols, margin ${ctx.margin.toFixed(3)} mm`);
     check('its margin is at least web/2', ctx.margin >= ctx.web / 2 - 1e-9,
@@ -21,7 +21,7 @@ export function run() {
   {
     // A piece exactly one pitch plus one web wide: the boundary case, cols === 1
     // and margin === web/2 exactly (values chosen to divide exactly in floating point).
-    const ctx = prepare(flatGrey(10, 10, 128), { ...plain, widthMm: 3, pitch: 2, web: 1 });
+    const ctx = prepare(flatGray(10, 10, 128), { ...plain, widthMm: 3, pitch: 2, web: 1 });
     check('a piece exactly one cell wide keeps cols=1 and margin=web/2', ctx.cols === 1 && Math.abs(ctx.margin - ctx.web / 2) < 1e-9,
       `${ctx.cols} cols, margin ${ctx.margin.toFixed(3)} mm`);
   }
@@ -31,7 +31,7 @@ export function run() {
     // with a margin below web/2 (or negative) -- the exact quantity the one-piece
     // structural guarantee depends on. It must now refuse instead.
     let threw = false;
-    try { prepare(flatGrey(10, 10, 128), { ...plain, widthMm: 1, pitch: 2, web: 1 }); }
+    try { prepare(flatGray(10, 10, 128), { ...plain, widthMm: 1, pitch: 2, web: 1 }); }
     catch (e) { threw = true; }
     check('a piece narrower than one pitch is refused, not silently clamped', threw);
   }
@@ -41,15 +41,15 @@ export function run() {
   // relationship decode a channel back with toLinear first, and use a looser
   // tolerance than an exact linear check would need, for the 8-bit round trip.
   {
-    const img = flatGrey(10, 10, 128);
+    const img = flatGray(10, 10, 128);
     check('applyTone: all three at their defaults is an identity (the same object)',
       applyTone(img, 1, 1, 1) === img);
   }
 
   {
-    const grey = flatGrey(4, 4, 128);
-    const base = toLinear(applyTone(grey, 1, 1, 1).data[0] / 255);
-    const bright = toLinear(applyTone(grey, 1, 2, 1).data[0] / 255);
+    const gray = flatGray(4, 4, 128);
+    const base = toLinear(applyTone(gray, 1, 1, 1).data[0] / 255);
+    const bright = toLinear(applyTone(gray, 1, 2, 1).data[0] / 255);
     check('brightness scales linear light', Math.abs(bright - Math.min(1, base * 2)) < 0.01,
       `base ${base.toFixed(4)}, ×2 → ${bright.toFixed(4)}`);
   }
@@ -77,7 +77,7 @@ export function run() {
   }
 
   {
-    const img = flatGrey(2, 2, 255);
+    const img = flatGray(2, 2, 255);
     const out = applyTone(img, 1, 3, 2);
     let ok = true;
     for (const v of out.data) if (!(Number.isFinite(v) && v >= 0 && v <= 255)) ok = false;

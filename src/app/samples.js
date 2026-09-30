@@ -1,7 +1,7 @@
 // Procedural sample images, used when a bundled preset photo fails to load (or as
 // the built-in samples themselves): a ramp, rings, and a lit sphere over a horizon.
-// Each comes in a grey version (for B&W) and a colour version (for a stack) -- the
-// colour ramp is a hue sweep, which as luminance would no longer be a ramp at all.
+// Each comes in a gray version (for B&W) and a color version (for a stack) -- the
+// color ramp is a hue sweep, which as luminance would no longer be a ramp at all.
 //
 // Pure pixel generation, with no dependency on app.js's state: app.js hands the
 // result straight to setImage().
@@ -20,12 +20,12 @@ function hslToRgb(h, s, l) {
 /**
  * @param {'ramp'|'rings'|string} kind  anything else falls back to the lit sphere
  * @returns {{width:number, height:number,
- *   colour:{width:number, height:number, data:Uint8ClampedArray},
- *   grey:{width:number, height:number, data:Uint8ClampedArray}}}
+ *   color:{width:number, height:number, data:Uint8ClampedArray},
+ *   gray:{width:number, height:number, data:Uint8ClampedArray}}}
  */
 export function generateSample(kind) {
   const w = 600, h = 600;
-  const grey = new Uint8ClampedArray(w * h * 4);
+  const gray = new Uint8ClampedArray(w * h * 4);
   const col = new Uint8ClampedArray(w * h * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -53,10 +53,10 @@ export function generateSample(kind) {
       }
       v = Math.max(0, Math.min(1, v));
       const p = 4 * (y * w + x);
-      grey[p] = grey[p + 1] = grey[p + 2] = v * 255; grey[p + 3] = 255;
+      gray[p] = gray[p + 1] = gray[p + 2] = v * 255; gray[p + 3] = 255;
       const [rr, gg, bb] = hslToRgb(hue, sat, v);
       col[p] = rr; col[p + 1] = gg; col[p + 2] = bb; col[p + 3] = 255;
     }
   }
-  return { width: w, height: h, colour: { width: w, height: h, data: col }, grey: { width: w, height: h, data: grey } };
+  return { width: w, height: h, color: { width: w, height: h, data: col }, gray: { width: w, height: h, data: gray } };
 }

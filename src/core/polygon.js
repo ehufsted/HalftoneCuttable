@@ -3,7 +3,7 @@
 // A polygon is {xs, ys, lab}: vertices in order with POSITIVE shoelace area (in
 // these y-down piece coordinates that is clockwise on screen), and lab[k] the
 // label of edge k (vertex k -> k+1). For a Voronoi cell the label is the
-// neighbouring seed across that edge, or -1 on the piece boundary, and it
+// neighboring seed across that edge, or -1 on the piece boundary, and it
 // survives every clip and inset -- which is how a hole knows which of its edges
 // face an image edge and so need a thicker web.
 //
@@ -15,7 +15,7 @@
 // offset). So one operation -- clip by a half-plane -- builds the cells, insets
 // them for the web, and insets again for the kerf, all exactly.
 
-/** Axis-aligned rectangle, every edge labelled -1 (the piece boundary). */
+/** Axis-aligned rectangle, every edge labeled -1 (the piece boundary). */
 export function rectPoly(x0, y0, x1, y1) {
   return { xs: [x0, x1, x1, x0], ys: [y0, y0, y1, y1], lab: [-1, -1, -1, -1] };
 }

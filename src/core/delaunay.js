@@ -5,7 +5,7 @@
 // Delaunay triangulation, Bowyer-Watson.
 //
 // Not dualised from the Voronoi cells regions.js already builds, though two seeds
-// are Delaunay neighbours exactly when their cells share an edge: clipHalfPlane
+// are Delaunay neighbors exactly when their cells share an edge: clipHalfPlane
 // does not record which seed produced each surviving edge, so the adjacency would
 // have to be threaded through a shared primitive, and recovering triangles would
 // then rest on separately-clipped cells agreeing on a vertex position to the last
@@ -19,13 +19,13 @@
 //
 // Adjacency is carried for the stripe methods, which treat stripe continuity
 // across a triangulation as an integer edge-matching condition. Tiling does not
-// need it; building the neighbour indices costs one hash pass.
+// need it; building the neighbor indices costs one hash pass.
 
 /**
  * Is q strictly inside the circumcircle of the COUNTER-CLOCKWISE triangle abc?
  *
- * The determinant form, translated to q, rather than comparing |q - centre|
- * against the circumradius. The centre involves a division by
+ * The determinant form, translated to q, rather than comparing |q - center|
+ * against the circumradius. The center involves a division by
  * 2*(ax(by-cy) + ...) that goes to zero for a thin triangle, and the coordinates
  * fed to it include the super-triangle's, twenty times the page span; above about
  * 1500 points that finds the cavity for a new point incorrectly, drops triangles,
@@ -112,7 +112,7 @@ export function triangulate(xs, ys) {
       // points along a straight edge are collinear and the four corners of a
       // rectangle are cocircular, which are precisely the cases where this test
       // is deciding between "on" and "just inside" the circle. Treating a point
-      // on the circle as inside re-triangulates the neighbourhood, which is
+      // on the circle as inside re-triangulates the neighborhood, which is
       // harmless; the alternative -- treating it as outside -- leaves a hole.
       //
       // RELATIVE, not absolute. The determinant scales as the fourth power of

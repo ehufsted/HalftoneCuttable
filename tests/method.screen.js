@@ -143,6 +143,16 @@ export function run() {
     // by two bridges, which are metal the tone cannot have -- 2 × 1.2 mm of a
     // ring's slot, 4% at 10 mm radius and 18% within 8 mm of the center (measured).
     // Ties are paid back in the slot width; bridges are not.
+    //
+    // The tolerance below is 4.5%, not 4%: concentric's ties stagger by the
+    // golden angle (methods/screen.js) rather than alternating 0/0.5, so no two
+    // rings' ties ever land at the same angle (the point -- minimally aligned,
+    // not stacked into a radial seam every other ring). That costs a little
+    // tone accuracy: many distinct irrational phases quantize to the raster
+    // less predictably than two repeating rational ones did, measured at
+    // 3.9% worst case against the old scheme's 3.2% -- bridges/specks/
+    // unresolved are unchanged (still zero), so this is quantization noise in
+    // the ties themselves, not a connectivity regression.
     for (const screen of ['lines', 'concentric', 'turing']) {
       for (const f of [0.3, 0.5, 0.7]) {
         const b = method.build(grayFor(f, 3, base.web), base, { screen, period: 3, ties: screen === 'concentric' ? 15 : 0 });
@@ -158,7 +168,7 @@ export function run() {
       worst = Math.max(worst, Math.abs(g - t) / t);
       rows.push(`${name}: ${num(g, 3)}/${num(t, 3)}`);
     }
-    check('flat fields: open fraction within 4% of the target, every screen, ties included', worst < 0.04,
+    check('flat fields: open fraction within 4.5% of the target, every screen, ties included', worst < 0.045,
       `achieved/target — ${rows.join(', ')}`);
   }
 

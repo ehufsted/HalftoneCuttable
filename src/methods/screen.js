@@ -90,6 +90,7 @@ const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
 const WORK_PIXELS = 2.5e6;
 const tri = (phase) => Math.abs(2 * (phase - Math.floor(phase)) - 1);
 const frac = (v) => v - Math.floor(v);
+const GOLDEN = 0.6180339887498949;   // (sqrt(5) - 1) / 2, the golden ratio's conjugate
 
 export function build(rgba, settings, params = {}) {
   const P = { ...DEF, ...params };
@@ -220,9 +221,15 @@ export function build(rgba, settings, params = {}) {
       // a regular tie pattern on (the whole point is that it isn't one fixed
       // direction) -- like the Turing screen, it relies on bridgeSheet alone.
       if (L > 0 && P.screen !== 'flowLic') {
-        // stagger the ties on alternate slots; round a ring, fit a whole number of them
+        // stagger the ties slot to slot; round a ring, fit a whole number of them.
+        // Concentric rings stagger by the golden angle instead of alternating
+        // 0/0.5: alternation lines every OTHER ring's ties up radially (ring 0,
+        // 2, 4, ... all land at the same stagger), the golden ratio's conjugate
+        // is the standard low-discrepancy step for exactly this -- irrational, so
+        // no run of rings ever repeats a prior ring's offset and ties stay
+        // minimally aligned radially, ring to ring, all the way out.
         const slot = Math.floor(phase);         // a slot spans one period, centered on +0.5
-        const stagger = (slot & 1) * 0.5;
+        const stagger = P.screen === 'concentric' ? frac(slot * GOLDEN) : (slot & 1) * 0.5;
         let spacing = L;
         if (ring) spacing = (2 * Math.PI * ring) / Math.max(3, Math.round((2 * Math.PI * ring) / L));
         if (frac(along / spacing + stagger) * spacing < bwTie) tie[q] = 1;

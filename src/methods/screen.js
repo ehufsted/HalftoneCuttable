@@ -6,6 +6,11 @@
 //   waves        the same, rippled
 //   concentric   rings round a center
 //   spiral       one slot winding out from a center
+//   flowLic      stripes bent along the image's own structure -- Line Integral
+//                Convolution + an oriented band-pass, iterated from noise
+//                (core/lic.js), read only LOCALLY (each pixel's own short
+//                streamline), so it tolerates a direction field that winds
+//                around a point
 //   turing       a reaction-diffusion labyrinth: spots in the darks, maze in
 //                the mids, a metal lace in the lights
 //
@@ -39,25 +44,33 @@ import { solveMix, fitMix, cumulativeOpen, mixColor } from '../core/separate.js'
 import { blur } from '../core/features.js';
 import { erode, edt, invert } from '../core/edt.js';
 import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
+import { buildLicRows, buildBandpassRows, applyRows, localNormalize, quadraturePhase } from '../core/lic.js';
 
 export const id = 'screen';
 export const label = 'Screen';
-export const blurb = 'The image thresholded against a repeating screen -- lines, waves, rings, a spiral or a Turing labyrinth -- then cleaned, tied and bridged like a stencil.';
+export const blurb = 'The image thresholded against a repeating screen -- lines, waves, rings, a spiral, image-aligned flow lines, or a Turing labyrinth -- then cleaned, tied and bridged like a stencil.';
 
-const stripes = (p) => p.screen !== 'turing';
+const stripes = (p) => p.screen !== 'turing' && p.screen !== 'flowLic';
 const centered = (p) => p.screen === 'concentric' || p.screen === 'spiral';
 
 export const params = [
   { key: 'screen', label: 'Screen', type: 'select', def: 'lines',
     options: [['lines', 'Straight lines'], ['waves', 'Wavy lines'], ['concentric', 'Concentric rings'],
-      ['spiral', 'Spiral'], ['turing', 'Turing pattern']] },
-  { key: 'period', label: 'Period', type: 'range', min: 1, max: 15, step: 0.1, def: 3, unit: 'mm', dp: 1 },
+      ['spiral', 'Spiral'], ['flowLic', 'Flow lines'], ['turing', 'Turing pattern']] },
+  // For flow lines this is the wavelength in the DARKS; Line contrast narrows
+  // it from there, toward the lights (narrowing in the darks would fight the
+  // area law instead of reading with it -- see where it's used).
+  { key: 'period', label: 'Period', type: 'range', min: 1, max: 15, step: 0.1, def: 6, unit: 'mm', dp: 1 },
   { key: 'angle', label: 'Angle', type: 'range', min: 0, max: 180, step: 1, def: 45, unit: '°',
     when: (p) => p.screen === 'lines' || p.screen === 'waves' },
   { key: 'amplitude', label: 'Wave height', type: 'range', min: 0, max: 10, step: 0.1, def: 2, unit: 'mm', dp: 1,
     when: (p) => p.screen === 'waves' },
   { key: 'wavelength', label: 'Wave length', type: 'range', min: 2, max: 60, step: 1, def: 15, unit: 'mm',
     when: (p) => p.screen === 'waves' },
+  { key: 'lineContrast', label: 'Line contrast', type: 'range', min: 0, max: 3, step: 0.1, def: 1, dp: 1,
+    when: (p) => p.screen === 'flowLic' },
+  { key: 'licIterations', label: 'Iterations', type: 'range', min: 2, max: 16, step: 1, def: 8,
+    when: (p) => p.screen === 'flowLic' },
   { key: 'cx', label: 'Center across', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5, when: centered },
   { key: 'cy', label: 'Center down', type: 'range', min: 0, max: 1, step: 0.01, def: 0.5, when: centered },
   { key: 'ties', label: 'Tie spacing', type: 'range', min: 0, max: 60, step: 1, def: 20, unit: 'mm', when: stripes },
@@ -68,9 +81,9 @@ export const params = [
     when: (p) => p.screen === 'turing' },
   { key: 'flow', label: 'Worms run', type: 'select', def: 'edges',
     options: [['edges', 'Along the edges'], ['gradient', 'Along the gradient']],
-    when: (p) => p.screen === 'turing' && p.anisotropy > 0 },
+    when: (p) => p.screen === 'flowLic' || (p.screen === 'turing' && p.anisotropy > 0) },
   { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1,
-    when: (p) => p.screen === 'turing' },
+    when: (p) => p.screen === 'turing' || p.screen === 'flowLic' },
 ];
 
 const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
@@ -116,10 +129,37 @@ export function build(rgba, settings, params = {}) {
   }
 
   // ---- each sheet's open fraction, per pixel: the fitted mix, on a coarser
-  // raster (the mix solve is the costly part) and interpolated up
-  const cpx = Math.min(px, 3);
+  // raster (the mix solve is the costly part) and interpolated up. Flow lines
+  // (LIC) builds two operators whose row COUNT is quadratic-ish in this grid's
+  // pixel count (each pixel's own streamline and band-pass window, both
+  // several samples long) and cost dominates for a piece of any real size, so
+  // it gets a tighter cap than the plain color-mix solve needs.
+  const cpx = Math.min(px, P.screen === 'flowLic' ? 1.5 : 3);
   const cw = Math.max(4, Math.round(W * cpx)), ch = Math.max(4, Math.round(H * cpx));
   const coarse = planes.map((pl) => resize(pl, cw, ch));
+  // Both flow-line screens' own wavelength, per coarse pixel: P.period in the darks,
+  // narrowing toward the lights. Narrower in the DARKS would fight the area
+  // law instead of reading with it -- open = light here (as every screen),
+  // so a dark target already asks for close to no open area, and dividing an
+  // already-tiny opening into even more, even-tinier slices only pushes each
+  // one further below the structural floor for nothing: the achieved tone
+  // does not change (the law conserves it regardless of how the period is
+  // sliced), and `cleanSheet` quietly erases most of what was drawn there.
+  // The lights have the opposite problem -- plenty of room, one wide slot per
+  // period reads as a single bold highlight -- so that is where narrowing
+  // usefully adds texture instead of erasing it.
+  //
+  // Computed here, before the duty fit below, so duty can be capped by THIS
+  // pixel's own fMax rather than the nominal one -- the metal-stays-at-least-
+  // web argument (fMax = 1 - web/L) only holds for the wavelength actually
+  // painted there.
+  const flowLmm = P.screen === 'flowLic' ? new Float64Array(cw * ch) : null;
+  if (flowLmm) {
+    for (let q = 0; q < cw * ch; q++) {
+      const light = Math.max(0, Math.min(1, luminance(coarse[0].data[q], coarse[1].data[q], coarse[2].data[q])));
+      flowLmm[q] = p / (1 + P.lineContrast * light);
+    }
+  }
   const Fc = Array.from({ length: nCut }, () => makeImage(cw, ch));
   const tgtC = Array.from({ length: D }, () => makeImage(cw, ch));
   {
@@ -129,7 +169,8 @@ export function build(rgba, settings, params = {}) {
       if (bw) x[0] = Math.max(0, Math.min(1, luminance(r, g, b)));
       else { x[0] = r; x[1] = g; x[2] = b; }
       solveMix(x, palette, m);
-      fitMix(m, fMax, P.range);
+      const localMax = flowLmm ? Math.max(0, 1 - web / flowLmm[q]) : fMax;
+      fitMix(m, localMax, P.range);
       cumulativeOpen(m, F);
       mixColor(m, palette, col);
       for (let j = 0; j < nCut; j++) Fc[j].data[q] = F[j];
@@ -151,7 +192,9 @@ export function build(rgba, settings, params = {}) {
   const th = (P.angle * Math.PI) / 180, ca = Math.cos(th), sa = Math.sin(th);
   const L = P.ties, bwTie = Math.max(P.bridgeWidth, web);
   const screen = new Float32Array(NP), tie = new Uint8Array(NP);
-  let orient = null;       // the Turing screen's direction field, when anisotropic
+  let orient = null;       // the Turing/flow screens' direction field, when anisotropic
+  let flowPhase = null;    // flow lines' phase, precomputed once over the whole raster
+  if (P.screen === 'flowLic') flowPhase = flowLicPhaseField();
   if (P.screen === 'turing') {
     turingScreen(screen);
   } else {
@@ -159,7 +202,9 @@ export function build(rgba, settings, params = {}) {
       const i = q % ww, j = (q - i) / ww;
       const x = (i + 0.5) / k, y = (j + 0.5) / ky;
       let phase, along, ring = 0;
-      if (P.screen === 'lines' || P.screen === 'waves') {
+      if (P.screen === 'flowLic') {
+        phase = flowPhase[q];
+      } else if (P.screen === 'lines' || P.screen === 'waves') {
         const u = x * ca + y * sa, v = -x * sa + y * ca;
         phase = (P.screen === 'waves' ? u + P.amplitude * Math.sin((2 * Math.PI * v) / P.wavelength) : u) / p;
         along = v;
@@ -171,7 +216,10 @@ export function build(rgba, settings, params = {}) {
         along = (t + 0.5) * 2 * Math.PI * ring;                  // arc length round it
       }
       screen[q] = tri(phase);
-      if (L > 0) {
+      // Flow lines have no simple global "along the stripe" coordinate to stagger
+      // a regular tie pattern on (the whole point is that it isn't one fixed
+      // direction) -- like the Turing screen, it relies on bridgeSheet alone.
+      if (L > 0 && P.screen !== 'flowLic') {
         // stagger the ties on alternate slots; round a ring, fit a whole number of them
         const slot = Math.floor(phase);         // a slot spans one period, centered on +0.5
         const stagger = (slot & 1) * 0.5;
@@ -270,7 +318,7 @@ export function build(rgba, settings, params = {}) {
     // approximation whose error hasn't been characterized, so left undone rather
     // than guessed at.
     dropped: 0, saturated: 0, note: notes.join(' · '),
-    debug: { ...debug, cuts, frame, tie, screen, fMax, orient },
+    debug: { ...debug, cuts, frame, tie, screen, fMax, orient, flowLmm, Fc, cw, ch },
   };
 
   /**
@@ -362,6 +410,103 @@ export function build(rgba, settings, params = {}) {
       const v = ((big[i] - lo) / span) * B, b = bin(big[i]), f = Math.min(1, Math.max(0, v - b));
       out[i] = (hist[b] + f * (hist[b + 1] - hist[b])) / NP;   // interpolated within the bin
     }
+  }
+
+  /**
+   * The image's own (smoothed) gradient direction, mod 2pi, one per coarse
+   * pixel -- flow lines' T.
+   *
+   * NOT core/steer.js's orientationField, despite it being right there and
+   * already used for the Turing screen's anisotropy. That field reconstructs
+   * a DOUBLED angle: an AXIS (mod pi, no front or back), the right choice
+   * when averaging many local gradients that could point either way without
+   * canceling (steerBlur just needs a line to steer along). Converting an
+   * axis to a vector by picking cos/sin of it outright -- flow lines' first
+   * version did exactly that -- cannot stay consistent all the way around a
+   * point the axis winds around once (the annulus test's radial image, for
+   * one) without a branch-cut discontinuity somewhere, which corrupted the
+   * phase well past the seam itself. A smoothed image's own single gradient
+   * has no such ambiguity to begin with.
+   */
+  function gradientDirection() {
+    const clum = makeImage(cw, ch);
+    for (let q = 0; q < cw * ch; q++) {
+      clum.data[q] = toEncoded(luminance(coarse[0].data[q], coarse[1].data[q], coarse[2].data[q]));
+    }
+    // direction judged over 1.5 periods, as the Turing screen's anisotropy is
+    const sm = blur(clum, 1.5 * cpx * p);
+    const g0 = new Float64Array(cw * ch);
+    for (let y = 0; y < ch; y++) {
+      const yu = Math.max(0, y - 1), yd = Math.min(ch - 1, y + 1);
+      for (let x = 0; x < cw; x++) {
+        const xl = Math.max(0, x - 1), xr = Math.min(cw - 1, x + 1);
+        const gx = (sm.data[y * cw + xr] - sm.data[y * cw + xl]) / 2;
+        const gy = (sm.data[yd * cw + x] - sm.data[yu * cw + x]) / 2;
+        g0[y * cw + x] = Math.atan2(gy, gx);
+      }
+    }
+    return g0;
+  }
+
+  /**
+   * FLOW LINES. Stripes grown along the image's own direction, and spaced by
+   * its own wavelength -- core/lic.js: Line Integral Convolution along the
+   * direction, an oriented band-pass across it to select the wavelength,
+   * local amplitude normalization, and a tanh soft clip, iterated from
+   * noise, then the phase recovered by quadrature. Read only LOCALLY (each
+   * pixel's own short streamline), unlike a global potential solve, so it
+   * tolerates a T that winds all the way around a point without needing one
+   * single consistent field to exist everywhere.
+   *
+   * T here is the reference's own convention, the ACROSS-stripe (normal)
+   * direction -- tangent = T + 90 deg -- so 'edges' (stripes run along the
+   * edge, tangent = gradient + 90) means T = the plain gradient direction
+   * itself, and 'gradient' (stripes run along the gradient) means
+   * T = gradient + 90.
+   */
+  function flowLicPhaseField() {
+    const g0 = gradientDirection();
+    const N = cw * ch;
+    const T = new Float64Array(N), Lpx = new Float64Array(N);
+    for (let q = 0; q < N; q++) {
+      T[q] = g0[q] + (P.flow === 'gradient' ? Math.PI / 2 : 0);
+      Lpx[q] = Math.max(2, flowLmm[q] * cpx);
+    }
+    const lic = buildLicRows(T, Lpx, cw, ch);
+    const bp = buildBandpassRows(T, Lpx, cw, ch);
+    let meanL = 0;
+    for (let q = 0; q < N; q++) meanL += Lpx[q];
+    meanL /= N;
+    const rand = mulberry32(P.seed | 0);
+    let u = new Float64Array(N);
+    for (let q = 0; q < N; q++) u[q] = rand() * 2 - 1;
+    const tanhGain = 2, tanhG = Math.tanh(tanhGain);
+    for (let it = 0; it < P.licIterations; it++) {
+      u = applyRows(bp, applyRows(lic, u));
+      u = localNormalize(u, cw, ch, meanL);
+      for (let q = 0; q < N; q++) u[q] = Math.tanh(tanhGain * u[q]) / tanhG;
+    }
+    // A few final LINEAR passes, no nonlinearity, for a clean phase to
+    // recover: tanh flattens u's peaks/troughs toward a square-ish profile,
+    // and quadraturePhase's atan2 is most sensitive right where that
+    // flattening happens (see docs/architecture.md for the full history).
+    for (let it = 0; it < 3; it++) {
+      u = applyRows(bp, applyRows(lic, u));
+      u = localNormalize(u, cw, ch, meanL);
+    }
+    const phi = quadraturePhase(u, T, Lpx, cw, ch);
+    // Upsample via (cos, sin) of the phase, not the phase itself: phi WRAPS
+    // (atan2's range is bounded, unlike every other screen's ever-increasing
+    // phase) right at the stripe center, where interpolating the raw angle
+    // breaks (see docs/architecture.md). A wrapped angle's (cos, sin) pair
+    // has no such discontinuity to interpolate across.
+    const cosPhi = new Float32Array(N), sinPhi = new Float32Array(N);
+    for (let q = 0; q < N; q++) { cosPhi[q] = Math.cos(2 * Math.PI * phi[q]); sinPhi[q] = Math.sin(2 * Math.PI * phi[q]); }
+    const c = resize({ w: cw, h: ch, data: cosPhi }, ww, wh).data;
+    const s = resize({ w: cw, h: ch, data: sinPhi }, ww, wh).data;
+    const out = new Float32Array(ww * wh);
+    for (let q = 0; q < ww * wh; q++) out[q] = Math.atan2(s[q], c[q]) / (2 * Math.PI);
+    return out;
   }
 }
 

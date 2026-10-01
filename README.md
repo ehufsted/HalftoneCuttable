@@ -56,13 +56,21 @@ Seven patterns:
   color, each sheet is cut by palette region. *Halftone inside shapes* fills each
   shape with round holes sized by its tone, instead of cutting it out whole.
 - **Screen:** the image compared against a repeating pattern: straight or wavy lines
-  (engraving), concentric rings, a spiral, or a Turing labyrinth (spots in the
-  shadows, a maze in the mids, metal lace in the lights). The Turing pattern's
+  (engraving), concentric rings, a spiral, flow lines, or a Turing labyrinth (spots
+  in the shadows, a maze in the mids, metal lace in the lights). The Turing pattern's
   *Anisotropy* stretches the worms along the image's edges, or along its gradient,
-  where the image has structure; it stays round where the image is flat. Then it's
-  cleaned up and
-  bridged like a stencil. *Tie spacing* puts staggered bars of metal across long
-  slots, so the strips between them don't flex or warp in the heat.
+  where the image has structure; it stays round where the image is flat. *Flow
+  lines* bends straight engraving lines to run along the image's own structure
+  instead (line integral convolution and a band-pass, grown from noise), and
+  also narrows their spacing in the lights (*Line contrast*) -- cut metal reads
+  as open/light, so a dark target already asks for little open area; narrowing
+  where there is little to narrow only erases detail, where the lights' spare
+  room turns into fine texture instead. A curving line has no simple
+  staggered-tie pattern, so it relies on bridging alone, like the Turing
+  pattern does. Then it's cleaned up and
+  bridged like a stencil. *Tie spacing* (the straight/wavy/ring/spiral screens)
+  puts staggered bars of metal across long slots, so the strips between them don't
+  flex or warp in the heat.
 
 ## Style
 

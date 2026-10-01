@@ -81,6 +81,34 @@ function thickPieces(b, holes, kerf, web) {
   return components(core, r.w, r.h).sizes.length;
 }
 
+/**
+ * Alignment score: over a region, the cut pattern's own local direction (its
+ * gradient, turned 90°) against a reference direction, as the gradient-energy-
+ * weighted mean of cos 2Δ -- doubled angles, since a line has no front or back.
+ * +1 = the pattern runs along the reference everywhere it has structure,
+ * -1 = across it, 0 = no preference. (Same construction as the anisotropic
+ * Turing check below, kept here so the flow-lines checks can reuse it too.)
+ */
+function alignScore(b, refAt, inRegion) {
+  const { cuts, ww, wh, k } = b.debug;
+  const C = cuts[0];
+  let n = 0, den = 0;
+  for (let y = 1; y < wh - 1; y++) {
+    for (let x = 1; x < ww - 1; x++) {
+      const xm = (x + 0.5) / k, ym = (y + 0.5) / k;
+      if (!inRegion(xm, ym)) continue;
+      const i = y * ww + x;
+      const gx = C[i + 1] - C[i - 1], gy = C[i + ww] - C[i - ww];
+      const e = gx * gx + gy * gy;
+      if (!e) continue;
+      const along = Math.atan2(gy, gx) + Math.PI / 2;
+      n += e * Math.cos(2 * (along - refAt(xm, ym)));
+      den += e;
+    }
+  }
+  return den ? n / den : 0;
+}
+
 export function run() {
   section('method.screen', 'Stripe geometry, tone, ties, bridges, one piece for every screen, Turing uniformity, color nesting.');
 
@@ -168,7 +196,7 @@ export function run() {
     const bad = [];
     let runs = 0;
     for (const [name, img] of [['ramp', ramp], ['busy', busy]]) {
-      for (const screen of ['lines', 'waves', 'concentric', 'spiral', 'turing']) {
+      for (const screen of ['lines', 'waves', 'concentric', 'spiral', 'flowLic', 'turing']) {
         const b = method.build(img, base, { screen, period: 3 });
         const holes = b.layers[0];
         const pieces = pieceCount({ ...b, kerf: base.kerf }, holes, PX);
@@ -280,5 +308,79 @@ export function run() {
     check('color: the deeper sheet’s slots lie inside the top sheet’s', deep > 0 && outside / deep < 0.01,
       `${num(100 * outside / Math.max(1, deep), 2)}% of its cut outside, ${deep} px cut`);
     check('color: every sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
+  }
+
+  // ---- flow lines: direction follows the image's own structure, spacing
+  // narrows in the lights, no ties needed (bridges alone hold it), deterministic
+  {
+    const radial = makeImage2(300, 300, (x, y) => Math.max(0, 1 - Math.hypot(x - 150, y - 150) / 150));
+    const s = { ...base, widthMm: 60 };
+    const tangent = (x, y) => Math.atan2(y - 30, x - 30) + Math.PI / 2;
+    const annulus = (x, y) => { const r = Math.hypot(x - 30, y - 30); return r > 6 && r < 24; };
+    // A period fine enough to fit ~20 of them across the piece is a much
+    // harder convergence target for an iterative LOCAL method in a fixed
+    // pass count than the same piece with room for only a handful --
+    // confirmed visually: the harder setting reads coherently near the
+    // center but speckles at the rim (isolated dots with no direction of
+    // their own, diluting an energy-weighted average regardless of how well
+    // the real worms track the field), while a coarser period reads clean
+    // and circular throughout.
+    const edges = method.build(radial, s, { screen: 'flowLic', period: 8, flow: 'edges', licIterations: 8 });
+    const round = method.build(radial, s, { screen: 'lines', angle: 0, period: 8 });
+    const aFlow = alignScore(edges, tangent, annulus), aLines = alignScore(round, tangent, annulus);
+    check('flow lines: the stripes bend to follow the image’s structure, unlike a fixed direction',
+      aFlow > 0.3 && aFlow > aLines + 0.3,
+      `alignment with the edges: ${num(aFlow, 2)} for flow lines, ${num(aLines, 2)} for straight lines at a fixed angle`);
+
+    // Light-to-dark ramp: read the wavelength FIELD itself (debug.flowLmm, the
+    // coarse mix-solve grid, left-to-right same as the image) rather than
+    // counting visible slot crossings in the final cut -- duty is also low on
+    // the dark side (by the area law, a dark target wants little open area
+    // regardless of spacing), so a raster scan there finds few or no slots to
+    // measure ANY spacing from, independent of whether the field is right.
+    // A flat white plateau at the light end (rather than a pure linear ramp all
+    // the way to x=0) so the duty-cap check below has a pixel that is genuinely
+    // saturated -- m[1] = 1 exactly, not just close to it -- to compare against.
+    const ramp = makeImage2(300, 100, (x) => (x < 100 ? 1 : Math.max(0, 1 - (x - 100) / 199)));
+    const b = method.build(ramp, { ...base, widthMm: 60 }, { screen: 'flowLic', period: 3, lineContrast: 1.5, licIterations: 6 });
+    const { flowLmm, cw, ch } = b.debug;
+    const row = Math.floor(ch / 2);
+    const lightL = flowLmm[row * cw + Math.round(0.05 * (cw - 1))];
+    const darkL = flowLmm[row * cw + Math.round(0.95 * (cw - 1))];
+    // Narrower in the LIGHTS, not the darks: cut metal reads as open/light, so a
+    // dark target already wants little open area, and narrowing the wavelength
+    // there only divides an already-tiny opening into tinier, sub-floor slices
+    // that cleanSheet erases -- the achieved tone does not change either way,
+    // the area law conserves it regardless of how a stretch is sliced into
+    // periods. The lights have the room instead, so that is where it reads.
+    check('flow lines: spacing narrows toward the lights',
+      lightL < darkL, `wavelength ${num(lightL, 3)} mm in the lights, ${num(darkL, 3)} mm in the darks`);
+
+    const key = (bb) => bb.layers[0].slice(0, 20).map((L) => `${L.xs.length}:${L.xs[0].toFixed(6)}`).join(',');
+    check('flow lines: same seed, same composition',
+      key(method.build(radial, s, { screen: 'flowLic', period: 3, seed: 4 })) ===
+      key(method.build(radial, s, { screen: 'flowLic', period: 3, seed: 4 })));
+    check('flow lines: another seed, another composition',
+      key(method.build(radial, s, { screen: 'flowLic', period: 3, seed: 4 })) !==
+      key(method.build(radial, s, { screen: 'flowLic', period: 3, seed: 5 })));
+
+    check('flow lines: no tie-staggering bridges are reported as tie shortfall',
+      b.note.indexOf('missed') < 0);
+
+    // Duty is capped by THIS pixel's own wavelength (1 - web/flowLmm[q]), not
+    // the nominal period's fMax (1 - web/period): a pure-white pixel wants the
+    // top sheet fully open, so fitMix saturates it against whichever cap
+    // applies, making the achieved duty read the cap directly. At the light
+    // end of the same ramp, the local cap (narrower L, from lineContrast) is
+    // well below the nominal one -- if screen.js regressed to the shared
+    // fMax, duty would read near the nominal cap instead, well past the local
+    // one, and the metal strip there would come out thinner than `web`.
+    const { Fc, fMax: nominalFMax } = b.debug;
+    const q = row * cw + Math.round(0.05 * (cw - 1));
+    const localMax = Math.max(0, 1 - base.web / lightL);
+    const duty = Fc[0].data[q];
+    check('flow lines: duty at a saturated pixel is capped by its own wavelength, not the nominal period',
+      Math.abs(duty - localMax) < 0.02 && duty < nominalFMax - 0.1,
+      `duty ${num(duty, 3)}, local cap ${num(localMax, 3)}, nominal fMax ${num(nominalFMax, 3)}`);
   }
 }

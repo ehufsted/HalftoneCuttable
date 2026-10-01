@@ -299,6 +299,132 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
 - **Color:** every sheet uses the same screen at its own cumulative open fraction,
   so deeper slots sit inside the ones above. Each is then narrowed by the
   registration allowance per sheet.
+- **Flow lines** (`core/lic.js`): stripes bent along the image's own
+  direction, with a wavelength that narrows in the lights (*Line contrast*) --
+  a fingerprint-synthesis style iteration from noise, ported from a MATLAB
+  reference implementation (`generateStripesLIC.m`, not part of this repo):
+  line integral convolution (LIC) along
+  the stripe tangent enforces coherence along a line, an oriented band-pass
+  across the normal selects the local wavelength, local RMS normalization
+  keeps the amplitude sane, and a `tanh` soft clip sharpens and stabilizes the
+  result each round (a simpler alternative to the reference's own coherence-
+  enhancing shock filter; the cut pipeline's own cleanup and trace resharpen
+  the boundary regardless of which, and it is confirmed NOT to be the cause of
+  any of the defects below -- the reference itself, run with the same tanh,
+  does not show them). The final field's phase is read off by quadrature
+  (`u ≈ cos(phi)`, so `n · grad(u) ≈ -k sin(phi)` gives `phi` directly). The
+  direction field is used only LOCALLY -- each pixel's own short streamline --
+  never assembled into one global field the way, say, a Poisson phase solve
+  would need to be, so it tolerates a T that winds all the way around a point
+  without needing a single consistent field to exist everywhere (see the next
+  entry for why that matters here). Unlike the other stripe screens, a curving
+  line has no simple global "along the stripe" coordinate to stagger a regular
+  tie pattern on, so `stripes(P)` excludes it too and it relies on
+  `bridgeSheet` alone, like Turing.
+- **T is a plain gradient, `atan2(gy, gx)` of a blurred image, NOT
+  `steer.orientationField`** despite it sitting right there already, imported,
+  and used for the Turing screen's own anisotropy. That field reconstructs a
+  DOUBLED angle: an axis (mod pi, no front or back), the right choice when
+  averaging many local gradients that could point either way without canceling
+  (steerBlur only needs a line to steer along, not a signed direction). An
+  earlier version of this screen used it anyway and converted the axis to a
+  vector by taking cos/sin of it outright -- which cannot stay consistent all
+  the way around a point the axis winds around once, the annulus test's radial
+  image being exactly that, without a branch-cut discontinuity somewhere,
+  which showed up as a wrong-SIGNED alignment score rather than just a noisy
+  one. A smoothed image's own single gradient has no such ambiguity -- it is a
+  genuine mod-2pi vector from the start, so `steer.orientationField` ended up
+  imported here for Turing's anisotropy alone.
+- **Flow lines' duty is capped by its OWN wavelength, not the nominal period.**
+  `fMax = 1 - web/period` is what guarantees the metal between two slots stays at
+  least the web wide, and it is only true for the period actually painted: capping
+  every pixel by one shared fMax while a narrower pixel paints a shorter period
+  asks for a period the cap was never priced against, and starves it of web
+  regardless of how much room the nominal period has. Fixed by computing each
+  coarse pixel's own wavelength BEFORE the duty fit and capping that pixel's duty
+  by its own `1 - web/L`, so `(1 - duty) × L = web` exactly, everywhere, by
+  construction -- not rescued after the fact by `cleanSheet`.
+- **Line contrast narrows in the LIGHTS, not the darks -- the area law forbids the
+  other way round.** Cut metal reads as open/light, the same convention every
+  method shares, so duty (the fraction of a period that gets cut) is already
+  small wherever the target is dark. The achieved tone is the INTEGRAL of duty
+  over a stretch of periods, which the area law keeps constant regardless of how
+  many periods that stretch is sliced into -- so narrowing the wavelength where
+  duty is already near zero does not add visible density; it divides an
+  already-tiny opening into more, even-tinier slices, each one further below the
+  structural floor for no gain, and `cleanSheet` erases nearly all of them. (A
+  real engraving's grooves hold ink, so denser grooves read darker; this app's
+  cut is the opposite -- a cut is open, so it reads lighter -- and the analogy
+  does not carry over write-for-write.) Caught by the harness twice over: the
+  first version's direction check read mostly bridge geometry (most of the
+  pattern near the image's own detail had been cleaned away), and its spacing
+  check found almost nothing to measure at the dark end. Narrowing in the LIGHTS
+  instead uses the room duty already has there, so it adds texture rather than
+  erasing it.
+- **Each row's fractional samples ARE split bilinearly across 4 neighbors
+  (`bilinearPush`), not rounded to the nearest pixel.** Rounding is exact
+  along an axis-aligned normal but staircases off it -- two consecutive
+  unit steps can round to the SAME pixel, then skip one, unevenly re-spacing
+  a kernel built assuming even steps. Only visible off-axis: a unit test at
+  T = 0 passed throughout, so this was caught by the harness's radial-image
+  alignment check (every angle at once) and by looking at the rendered
+  pattern (stripes read visibly doubled), not by that test.
+- **Row-building has to stay allocation-light, not just correct**: each of
+  a coarse grid's pixels samples its own streamline and band-pass window,
+  several samples long, each split 4 ways -- tens of millions of entries
+  for a piece of any real size. An early version returned a throwaway array
+  per sample and spread it into the row; that was the difference between
+  finishing and not. Rows are now built by appending straight onto growable
+  arrays, and `flowLic` caps its coarse grid tighter than the plain
+  color-mix solve needs (`cpx`, methods/screen.js).
+- **The band-pass window IS the reference's own 3 sigma, not a narrower one
+  -- this is what actually caused a maze-like extra line splitting every
+  stripe down its own center, not the quadrature step.** An intermediate
+  version narrowed this window to 2 sigma alongside the row-building
+  changes above, reasoning it captured ~95% of the Gaussian's mass for
+  less cost. But a band-pass filter's window length IS its frequency
+  selectivity (an uncertainty-principle tradeoff, not just a sample-count
+  knob), and `tanh`'s sharpening gives u real harmonic content to reject --
+  content the narrower window let leak through into `quadraturePhase`,
+  where it showed up as spurious extra crossings near u's own extrema
+  (both of atan2's arguments are small there, an extremum by definition, so
+  leftover harmonic wobble tips which one dominates). Two rounds of patching
+  the symptom -- a light re-blur of u before the gradient, then cascading
+  the final linear (no-nonlinearity) pass from one application to three --
+  each helped a little without fixing it, because neither touched the
+  actual cause. Confirmed by comparing against the reference directly (run
+  with the same tanh nonlinearity, at its own 3 sigma window, on the same
+  kind of image): no such artifact. Both mitigations stayed in afterward, as
+  cheap extra margin now that the real fix is in, not as the fix itself.
+- **The 3-sigma band-pass fixed the maze-like branching; a NARROWER, dead
+  straight 1-pixel seam down every stripe's own middle remained -- a
+  completely different bug, in how the coarse phase gets to the full
+  raster, not in the pattern itself.** Every other screen's `phase` is an
+  ever-increasing real number (`lines`: `phase = u/p`), safe to bilinearly
+  resize outright. `quadraturePhase`'s phase comes from `atan2`, which
+  WRAPS (bounded to (-0.5, 0.5]) -- and the wrap point, phase 0.5, is
+  exactly where `tri(phase)` sits at its minimum: the center of every
+  stripe. Interpolating the raw wrapped value straight across that wrap (a
+  coarse pixel storing 0.49 next to one whose true phase is 0.51 but reads
+  as -0.49) linearly averages to ~0, not the true ~0.5 -- a spurious extra
+  threshold crossing, dropped right down the stripe's own middle, once per
+  period. Fixed the standard way any wrapped/circular quantity is
+  interpolated: resize `(cos(2*pi*phase), sin(2*pi*phase))` instead of
+  `phase` itself, which has no discontinuity to interpolate across, and
+  reconstruct the angle from the UPSAMPLED pair afterward
+  (`flowLicPhaseField`, methods/screen.js).
+- **A period fine enough to fit ~20 of them across the piece is a much
+  harder convergence target than one with room for only a handful, for an
+  iterative LOCAL method in a fixed pass count.** The alignment check read
+  weak alignment at such a period even once the bugs above were fixed -- not
+  because direction-following was actually broken (a real render at "along
+  the edges" circled a center cleanly, holding its radius the whole way
+  round, at a coarser period on a similar image), but because the fine
+  period speckles at the pattern's rim: isolated dots with no direction of
+  their own, which an energy-weighted alignment average cannot tell apart
+  from a real stripe boundary, diluting the score regardless of how well the
+  real worms track the field. Confirmed by eye before changing the test, not
+  guessed at.
 
 ## Style filters
 

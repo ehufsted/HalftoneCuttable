@@ -116,6 +116,13 @@
   .canvaswrap { position: relative; box-shadow: 0 2px 18px #0008; background: #fff; }
   .canvaswrap canvas { display: block; }
 
+  .rulerwrap { display: flex; flex-direction: column; }
+  .ruler-row { display: flex; }
+  #rulerCorner { width: 20px; height: 20px; flex: 0 0 auto; background: #20232b; }
+  #rulerTop { height: 20px; flex: 0 0 auto; }
+  #rulerLeft { width: 20px; flex: 0 0 auto; }
+  #rulerCorner[hidden], #rulerTop[hidden], #rulerLeft[hidden] { display: none; }
+
   footer {
     flex: 0 0 auto; border-top: 1px solid var(--line); padding: 6px 12px;
     display: flex; gap: 18px; align-items: center; color: var(--dim);
@@ -339,12 +346,22 @@
         <button data-view="diff" aria-pressed="false">Difference</button>
       </div>
       <select id="cutLayer" hidden></select>
+      <label class="check"><input type="checkbox" id="rulers"> Rulers</label>
       <div class="spacer"></div>
       <span id="hint" class="note"></span>
     </div>
     <div class="stage">
-      <div class="canvaswrap" id="wrap">
-        <canvas id="view"></canvas>
+      <div class="rulerwrap">
+        <div class="ruler-row">
+          <div id="rulerCorner" hidden></div>
+          <canvas id="rulerTop" hidden></canvas>
+        </div>
+        <div class="ruler-row">
+          <canvas id="rulerLeft" hidden></canvas>
+          <div class="canvaswrap" id="wrap">
+            <canvas id="view"></canvas>
+          </div>
+        </div>
       </div>
     </div>
   </section>

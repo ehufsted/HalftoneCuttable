@@ -29,6 +29,7 @@ const state = {
   methodId: METHODS[0].id,
   params: defaultsFor(METHODS[0]),
   view: 'result',
+  rulers: false,
   palette: DEFAULT_PALETTES[3].slice(),
   // Style filters: the chain order, which are on, and each one's settings
   style: {
@@ -201,12 +202,15 @@ function updateGridNote(s, rgba) {
 }
 
 // ------------------------------------------------------------------- paint
+const RULER_SIZE = 20;
+
 function fitStage(canvas, w, h) {
   canvas.width = w;
   canvas.height = h;
   const stage = document.querySelector('.stage');
-  const maxW = stage.clientWidth - 28;
-  const maxH = stage.clientHeight - 28;
+  const rulerSpace = state.rulers ? RULER_SIZE : 0;
+  const maxW = stage.clientWidth - 28 - rulerSpace;
+  const maxH = stage.clientHeight - 28 - rulerSpace;
   const scale = Math.min(maxW / w, maxH / h, 2);
   const cssW = Math.max(1, Math.floor(w * scale));
   const cssH = Math.max(1, Math.floor(h * scale));
@@ -214,6 +218,88 @@ function fitStage(canvas, w, h) {
   canvas.style.height = `${cssH}px`;
   $('wrap').style.width = `${cssW}px`;
   $('wrap').style.height = `${cssH}px`;
+  return { scale, cssW, cssH };
+}
+
+/** Shows/hides the ruler canvases and redraws their ticks for the current zoom. */
+function updateRulers(pv, scale, cssW, cssH) {
+  const show = state.rulers;
+  $('rulerCorner').hidden = !show;
+  $('rulerTop').hidden = !show;
+  $('rulerLeft').hidden = !show;
+  if (!show) return;
+  const pxPerMmCss = pv.pxPerMm * scale;
+  const step = rulerStep(pxPerMmCss);
+  sizeRulerCanvas($('rulerTop'), cssW, RULER_SIZE);
+  sizeRulerCanvas($('rulerLeft'), RULER_SIZE, cssH);
+  drawRuler($('rulerTop').getContext('2d'), cssW, pxPerMmCss, step, false);
+  drawRuler($('rulerLeft').getContext('2d'), cssH, pxPerMmCss, step, true);
+}
+
+function sizeRulerCanvas(canvas, cssW, cssH) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+}
+
+/** The mm spacing between labeled major ticks, the first "nice" step that
+ * keeps labels at least ~45 css px apart at the current zoom. */
+function rulerStep(pxPerMmCss) {
+  const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+  for (const s of steps) if (s * pxPerMmCss >= 45) return s;
+  return steps[steps.length - 1];
+}
+
+function drawRuler(ctx, lengthCss, pxPerMmCss, majorStep, vertical) {
+  const dpr = window.devicePixelRatio || 1;
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, vertical ? RULER_SIZE : lengthCss, vertical ? lengthCss : RULER_SIZE);
+  ctx.fillStyle = '#20232b';
+  ctx.fillRect(0, 0, vertical ? RULER_SIZE : lengthCss, vertical ? lengthCss : RULER_SIZE);
+  ctx.strokeStyle = '#8a92a6';
+  ctx.fillStyle = '#c6cad6';
+  ctx.font = '10px sans-serif';
+  ctx.lineWidth = 1;
+  const minorStep = majorStep / 5;
+  const maxMm = lengthCss / pxPerMmCss;
+  for (let mm = 0; mm <= maxMm + minorStep; mm += minorStep) {
+    const pos = Math.round(mm * pxPerMmCss) + 0.5;
+    if (pos > lengthCss) break;
+    const isMajor = Math.round(mm / minorStep) % 5 === 0;
+    const tickLen = isMajor ? RULER_SIZE : RULER_SIZE * 0.4;
+    ctx.beginPath();
+    if (vertical) {
+      ctx.moveTo(RULER_SIZE - tickLen, pos);
+      ctx.lineTo(RULER_SIZE, pos);
+    } else {
+      ctx.moveTo(pos, RULER_SIZE - tickLen);
+      ctx.lineTo(pos, RULER_SIZE);
+    }
+    ctx.stroke();
+    if (isMajor && mm > 0) {
+      const label = String(Math.round(mm));
+      if (vertical) {
+        // Fixed inset from the canvas-adjacent edge, independent of tickLen
+        // (which spans the full width for major ticks) so the rotated label
+        // always lands inside the ruler's bounds instead of off its edge.
+        ctx.save();
+        ctx.translate(RULER_SIZE - 6, pos + 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(label, pos + 2, 1);
+      }
+    }
+  }
+  ctx.restore();
 }
 
 const HINTS = {
@@ -229,7 +315,8 @@ function paint() {
   if (!res) return;
   const canvas = $('view');
   const pv = res.preview;
-  fitStage(canvas, pv.w, pv.h);
+  const { scale, cssW, cssH } = fitStage(canvas, pv.w, pv.h);
+  updateRulers(pv, scale, cssW, cssH);
   const ctx = canvas.getContext('2d');
   $('hint').textContent = state.view === 'result' && res.piece.mode === 'color'
     ? 'front-lit, as the stacked sheets look' : HINTS[state.view] || '';
@@ -738,6 +825,10 @@ function wireViewControls() {
     b.addEventListener('click', () => setView(b.dataset.view));
   }
   $('cutLayer').addEventListener('change', paint);
+  $('rulers').addEventListener('change', () => {
+    state.rulers = $('rulers').checked;
+    paint();
+  });
 
   let resizeTimer = null;
   window.addEventListener('resize', () => {

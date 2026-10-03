@@ -45,18 +45,22 @@ import { blur } from '../core/features.js';
 import { erode, edt, invert } from '../core/edt.js';
 import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
 import { buildLicRows, buildBandpassRows, applyRows, localNormalize, quadraturePhase } from '../core/lic.js';
+import { placeWeightedPoints } from '../core/seeds.js';
+import { growVeins, rasterizeVeins } from '../core/sca.js';
 
 export const id = 'screen';
 export const label = 'Screen';
-export const blurb = 'The image thresholded against a repeating screen -- lines, waves, rings, a spiral, image-aligned flow lines, or a Turing labyrinth -- then cleaned, tied and bridged like a stencil.';
+export const blurb = 'The image thresholded against a repeating screen -- lines, waves, rings, a spiral, image-aligned flow lines, a Turing labyrinth, or a vein network -- then cleaned, tied and bridged like a stencil.';
 
-const stripes = (p) => p.screen !== 'turing' && p.screen !== 'flowLic';
+const stripes = (p) => p.screen !== 'turing' && p.screen !== 'flowLic' && p.screen !== 'veins';
 const centered = (p) => p.screen === 'concentric' || p.screen === 'spiral';
 
 export const params = [
   { key: 'screen', label: 'Screen', type: 'select', def: 'lines',
     options: [['lines', 'Straight lines'], ['waves', 'Wavy lines'], ['concentric', 'Concentric rings'],
-      ['spiral', 'Spiral'], ['flowLic', 'Flow lines'], ['turing', 'Turing pattern']] },
+      ['spiral', 'Spiral'], ['flowLic', 'Flow lines'], ['turing', 'Turing pattern'], ['veins', 'Veins']] },
+  { key: 'veinWidth', label: 'Branch width', type: 'range', min: 0.5, max: 6, step: 0.1, def: 2, unit: 'mm', dp: 1,
+    when: (p) => p.screen === 'veins' },
   // For flow lines this is the wavelength in the DARKS; Line contrast narrows
   // it from there, toward the lights (narrowing in the darks would fight the
   // area law instead of reading with it -- see where it's used).
@@ -83,7 +87,7 @@ export const params = [
     options: [['edges', 'Along the edges'], ['gradient', 'Along the gradient']],
     when: (p) => p.screen === 'flowLic' || (p.screen === 'turing' && p.anisotropy > 0) },
   { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1,
-    when: (p) => p.screen === 'turing' || p.screen === 'flowLic' },
+    when: (p) => p.screen === 'turing' || p.screen === 'flowLic' || p.screen === 'veins' },
 ];
 
 const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
@@ -198,6 +202,11 @@ export function build(rgba, settings, params = {}) {
   if (P.screen === 'flowLic') flowPhase = flowLicPhaseField();
   if (P.screen === 'turing') {
     turingScreen(screen);
+  } else if (P.screen === 'veins') {
+    // Veins have no simple global "along the branch" coordinate either (like
+    // flowLic), so -- same as flowLic and Turing -- there are no ties; it
+    // relies on bridgeSheet alone.
+    veinsScreen(screen);
   } else {
     for (let q = 0; q < NP; q++) {
       const i = q % ww, j = (q - i) / ww;
@@ -417,6 +426,60 @@ export function build(rgba, settings, params = {}) {
       const v = ((big[i] - lo) / span) * B, b = bin(big[i]), f = Math.min(1, Math.max(0, v - b));
       out[i] = (hist[b] + f * (hist[b + 1] - hist[b])) / NP;   // interpolated within the bin
     }
+  }
+
+  /**
+   * A vein network (core/sca.js, space colonization) as a screen: ONE tree,
+   * grown at a UNIFORM density (the image plays no part in its geometry, the
+   * same way a stripe's spacing doesn't) from roots ringing the border toward
+   * attractors spread evenly at `period`. The screen value is a smooth cone
+   * around each branch's own centerline -- 1 exactly on it, falling straight
+   * to 0 at `veinWidth/2` away -- built from an exact distance transform
+   * against the branch skeleton, not the grown-and-capped mask: a mask's own
+   * edge is already offset by its radius, which would double the falloff.
+   *
+   * This is what gives veins a working color model where the per-node label
+   * scheme (methods/veinWeb.js's original approach) did not: `cutSheet`
+   * already thresholds this SAME continuous field at each sheet's own
+   * cumulative open fraction, the same mechanism every other screen type
+   * uses, so sheet j's solid region naturally NESTS inside sheet j-1's
+   * (smaller cumulative fraction -> satisfied closer to the centerline only).
+   * A branch's cross-section therefore reads as concentric rings: the
+   * dominant (shallowest) color at its core, each deeper color a thinner ring
+   * further out, fading to fully open at the edge -- "inset by color",
+   * exactly the way Voronoi's nested holes or a Turing sheet's own band
+   * already inset deeper colors, just read radially across a branch instead
+   * of radially across a cell.
+   */
+  function veinsScreen(out) {
+    const e = web + kerf / 2 + (s.border || 0);
+    const rect = [e, e, W - e, H - e];
+    const rho = new Float64Array(NP);
+    for (let q = 0; q < NP; q++) {
+      const i = q % ww, j = (q - i) / ww;
+      const x = (i + 0.5) / k, y = (j + 0.5) / ky;
+      rho[q] = x >= rect[0] && y >= rect[1] && x <= rect[2] && y <= rect[3] ? 1 / (p * p) : 0;
+    }
+    const rand = mulberry32(P.seed | 0);
+    const sMin = Math.max(0.3, p * 0.4);
+    const placed = placeWeightedPoints(rho, ww, wh, k, ky, rect, sMin, 4, rand);
+    const stepSize = Math.max(0.2, p * 0.5);
+    const roots = [];
+    const addEdge = (x0, y0, x1, y1) => {
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      const steps = Math.max(1, Math.round(len / stepSize));
+      for (let i = 0; i < steps; i++) { const t = i / steps; roots.push({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t }); }
+    };
+    addEdge(e, e, W - e, e); addEdge(W - e, e, W - e, H - e); addEdge(W - e, H - e, e, H - e); addEdge(e, H - e, e, e);
+    const tree = growVeins({
+      roots, attractors: Array.from({ length: placed.xs.length }, (_, i) => ({ x: placed.xs[i], y: placed.ys[i] })),
+      stepSize, killDistance: stepSize, influenceRadius: p * 4,
+      maxIter: Math.min(4000, Math.ceil((2 * Math.hypot(W, H)) / stepSize)), rand,
+    });
+    const skeleton = rasterizeVeins(tree, ww, wh, k, ky, () => 0);   // a 1-px centerline, not a capped mask
+    const dCenter = edt(skeleton, ww, wh);   // distance TO the centerline (edt measures to the SET pixels)
+    const half = (P.veinWidth / 2) * k;
+    for (let q = 0; q < NP; q++) out[q] = Math.max(0, 1 - dCenter[q] / half);
   }
 
   /**

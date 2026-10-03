@@ -31,6 +31,12 @@
 // HALFTONE INSIDE SHAPES (checkbox) replaces 3-5: each shape is filled with a
 // grid of round holes sized by the tone inside it, each kept within its shape.
 // Separate convex holes cannot enclose metal, so no bridges are needed.
+//
+// FILL: VEINS, the other halftone style, keeps a branching vein network
+// (core/sca.js) instead of circles -- the vein is the metal, everything else
+// in the shape reverts to the background label (cut through every sheet).
+// Unlike circles, this still needs steps 3-5 (thin veins can pinch), so it
+// re-enters the normal pipeline once it has its own per-pixel label raster.
 
 import { linearPlanes, prepareRaster } from '../core/units.js';
 import { resize } from '../shim/image.js';
@@ -38,6 +44,9 @@ import { toEncoded, encodeFast, luminance } from '../core/color.js';
 import { blur } from '../core/features.js';
 import { edt, dilate, invert, components } from '../core/edt.js';
 import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
+import { mulberry32 } from '../shim/random.js';
+import { placeWeightedPoints } from '../core/seeds.js';
+import { growVeins, rasterizeVeins } from '../core/sca.js';
 
 export const id = 'stencil';
 export const label = 'Stencil';
@@ -48,10 +57,19 @@ export const params = [
     when: (p, env) => env.mode !== 'color' },
   { key: 'smooth', label: 'Shape smoothing', type: 'range', min: 0, max: 3, step: 0.1, def: 0.5, unit: 'mm', dp: 1 },
   { key: 'halftone', label: 'Halftone inside shapes', type: 'checkbox', def: false },
+  { key: 'fillStyle', label: 'Fill', type: 'select', def: 'circles',
+    options: [['circles', 'Circles'], ['veins', 'Veins']], when: (p) => p.halftone },
   { key: 'pitch', label: 'Hole pitch', type: 'range', min: 1, max: 20, step: 0.1, def: 4, unit: 'mm', dp: 1,
-    when: (p) => p.halftone },
+    when: (p) => p.halftone && p.fillStyle !== 'veins' },
   { key: 'range', label: 'Tone range', type: 'select', def: 'squeeze',
-    options: [['squeeze', 'Squeeze to fit'], ['clip', 'Clip highlights']], when: (p) => p.halftone },
+    options: [['squeeze', 'Squeeze to fit'], ['clip', 'Clip highlights']],
+    when: (p) => p.halftone && p.fillStyle !== 'veins' },
+  { key: 'veinPitch', label: 'Vein spacing', type: 'range', min: 1, max: 20, step: 0.1, def: 4, unit: 'mm', dp: 1,
+    when: (p) => p.halftone && p.fillStyle === 'veins' },
+  { key: 'veinThickness', label: 'Max branch width', type: 'range', min: 0.5, max: 6, step: 0.1, def: 1.5, unit: 'mm', dp: 1,
+    when: (p) => p.halftone && p.fillStyle === 'veins' },
+  { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1,
+    when: (p) => p.halftone && p.fillStyle === 'veins' },
   { key: 'floating', label: 'Allow floating parts (glue them down)', type: 'checkbox', def: false,
     when: (p) => !p.halftone },
   { key: 'bridges', label: 'Bridges', type: 'select', def: 'auto',
@@ -64,6 +82,7 @@ export const params = [
 const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
 const WORK_PIXELS = 2.5e6;
 const WINDOW = 3;           // mm, scoring window
+const MAX_VEIN_ATTRACTORS = 40000;
 
 export function build(rgba, settings, params = {}) {
   const P = { ...DEF, ...params };
@@ -115,6 +134,9 @@ export function build(rgba, settings, params = {}) {
     cuts.push(C);
   }
 
+  const pixOf = (x, y) => Math.min(wh - 1, Math.max(0, Math.floor(y * ky))) * ww +
+    Math.min(ww - 1, Math.max(0, Math.floor(x * k)));
+
   const notes = [];
   const debug = { k, ww, wh, lab, bridges: [], fallback: 0, unresolved: 0, specks: 0, floating: 0 };
   const { cleanSheet, bridgeSheet, finishSheet, measureWeb, traceSheet } = sheetTools({
@@ -148,6 +170,8 @@ export function build(rgba, settings, params = {}) {
     if (debug.unresolved) notes.push(`${debug.unresolved} parts could NOT be bridged — they will fall out`);
     if (debug.floating) notes.push(`${debug.floating} floating parts to glue down`);
     if (debug.specks) notes.push(`${debug.specks} metal specks too small to hold were cut away`);
+  } else if (P.fillStyle === 'veins') {
+    ({ layers, webs, tgtPix, cellsLabel } = veinShapes());
   } else {
     ({ layers, webs, tgtPix, cellsLabel } = halftoneShapes());
   }
@@ -173,12 +197,9 @@ export function build(rgba, settings, params = {}) {
   // ======================================================================
   // helpers (closures over the raster)
 
-  /** Halftone inside shapes: a grid of round holes, each kept within its shape. */
-  function halftoneShapes() {
-    const p = P.pitch;
-    const dmax = p - web - 2 * (nCut - 1) * reg;
-    const fMax = dmax > 0 ? (Math.PI * dmax * dmax) / 4 / (p * p) : 0;
-    // distance from each pixel to the nearest pixel of another shape
+  /** Distance from each shape pixel to the nearest pixel of another shape
+   *  (or background), mm -- the margin both halftone fill styles cap against. */
+  function shapeDistances() {
     const dOther = new Float32Array(NP);
     for (let l = 1; l < n; l++) {
       const other = new Uint8Array(NP);
@@ -186,13 +207,24 @@ export function build(rgba, settings, params = {}) {
       const d = edt(other, ww, wh);
       for (let q = 0; q < NP; q++) if (lab[q] === l) dOther[q] = d[q] / k;
     }
-    const tone = (q, l) => {
-      if (bw) return src[q];
-      const c0 = palette[0], cl = palette[l];
-      let num = 0, den = 0;
-      for (let d = 0; d < 3; d++) { num += (src[3 * q + d] - c0[d]) * (cl[d] - c0[d]); den += (cl[d] - c0[d]) ** 2; }
-      return den > 0 ? Math.max(0, Math.min(1, num / den)) : 0;
-    };
+    return dOther;
+  }
+
+  /** How dark/toned pixel q is, projected onto shape l's own color (0..1). */
+  function tone(q, l) {
+    if (bw) return src[q];
+    const c0 = palette[0], cl = palette[l];
+    let num = 0, den = 0;
+    for (let d = 0; d < 3; d++) { num += (src[3 * q + d] - c0[d]) * (cl[d] - c0[d]); den += (cl[d] - c0[d]) ** 2; }
+    return den > 0 ? Math.max(0, Math.min(1, num / den)) : 0;
+  }
+
+  /** Halftone inside shapes: a grid of round holes, each kept within its shape. */
+  function halftoneShapes() {
+    const p = P.pitch;
+    const dmax = p - web - 2 * (nCut - 1) * reg;
+    const fMax = dmax > 0 ? (Math.PI * dmax * dmax) / 4 / (p * p) : 0;
+    const dOther = shapeDistances();
     const fit = (t) => (P.range === 'clip' ? Math.min(t, fMax) : t * fMax);
     const eg = web + kerf / 2 + dmax / 2 + (nCut - 1) * reg;
     const gc = W >= 2 * eg ? Math.floor((W - 2 * eg) / p) + 1 : 0;
@@ -248,6 +280,120 @@ export function build(rgba, settings, params = {}) {
       for (let d = 0; d < D; d++) out[d] = (1 - F) * palette[0][d] + F * palette[l][d];
     };
     return { layers: lays, webs: ws, tgtPix: tp, cellsLabel: `${dots.length.toLocaleString()} holes` };
+  }
+
+  /**
+   * Vein fill: instead of circles, each shape keeps only a branching vein
+   * network (core/sca.js), rooted at its own "spine" (the point farthest
+   * from any other shape) and grown toward tone-weighted attractors, the
+   * same placement Stipple uses (core/seeds.js's placeWeightedPoints).
+   * Everything in the shape NOT covered by a vein reverts to the sentinel
+   * "cut through everything" label, same as true background -- so the
+   * shape ends up mostly open, laced by the vein's own metal.
+   *
+   * Unlike the circle grid (isolated convex holes, safe by construction),
+   * thin veins near a shape's edge can pinch, so this re-enters Stencil's
+   * own cleanSheet/bridgeSheet/finishSheet/traceSheet pipeline per sheet,
+   * exactly as the non-halftone path already does.
+   */
+  function veinShapes() {
+    const p = P.veinPitch;
+    const dOther = shapeDistances();
+    const rand = mulberry32(P.seed | 0);
+    // DEFAULT (no vein) is the shape's own ordinary label l, unchanged --
+    // exactly what it would be without halftone at all (cut out whole,
+    // revealing l). VEIN overrides specific pixels to vlab=0: solid on every
+    // sheet, the same default appearance (palette[0], the top sheet) Circles
+    // always falls back to between its own holes. This mirrors Circles
+    // exactly (default=solid(0)/feature=reveals l), just with the sparsity
+    // inverted (default=open/reveals l, feature=solid(0)) -- and unlike an
+    // earlier version that tried "vein=l, no-vein=a deeper sentinel", it
+    // never needs a sentinel at all: 0 is always distinct from any real l>=1,
+    // so there's no B&W (or deepest-color) collision to worry about.
+    const vlab = Uint8Array.from(lab);
+    let totalNodes = 0;
+
+    for (let l = 1; l < n; l++) {
+      const rho = new Float64Array(NP);
+      let M = 0;
+      for (let q = 0; q < NP; q++) {
+        if (lab[q] !== l) continue;
+        // tone(q,l) is the OPEN-area fraction the circle fill would cut (high
+        // = brighter = wants more open area); a vein is the opposite -- it's
+        // the METAL that survives -- so density runs on how much of the area
+        // should NOT be open, 1 - tone.
+        rho[q] = Math.min(1 - tone(q, l), 0.95) / (p * p);
+        M += rho[q] / (k * ky);
+      }
+      if (Math.round(M) > MAX_VEIN_ATTRACTORS) {
+        throw new Error(`${Math.round(M)} veins is too many for one shape — raise the vein spacing`);
+      }
+      const sMin = Math.max(0.3, p * 0.4);
+      const placed = placeWeightedPoints(rho, ww, wh, k, ky, [0, 0, W, H], sMin, 4, rand);
+      if (!placed.xs.length) continue;   // no attractors: this shape just keeps its default (fully open) look
+
+      // one root per connected component of this shape's own label, at the
+      // component's own "spine" (farthest point from any other shape) --
+      // so a letter with two disjoint strokes gets a root in each.
+      const compMask = new Uint8Array(NP);
+      for (let q = 0; q < NP; q++) compMask[q] = lab[q] === l ? 1 : 0;
+      const { id: compId, sizes: compSizes } = components(compMask, ww, wh);
+      const bestD = new Float64Array(compSizes.length).fill(-1), bestQ = new Int32Array(compSizes.length).fill(-1);
+      for (let q = 0; q < NP; q++) {
+        const c = compId[q];
+        if (c >= 0 && dOther[q] > bestD[c]) { bestD[c] = dOther[q]; bestQ[c] = q; }
+      }
+      const roots = [];
+      for (const q of bestQ) {
+        if (q < 0) continue;
+        const i = q % ww, j = (q - i) / ww;
+        roots.push({ x: (i + 0.5) / k, y: (j + 0.5) / ky });
+      }
+      if (!roots.length) continue;
+
+      const attractors = Array.from({ length: placed.xs.length }, (_, i) => ({ x: placed.xs[i], y: placed.ys[i] }));
+      const stepSize = Math.max(0.2, p * 0.5);
+      const tree = growVeins({
+        roots, attractors, stepSize, killDistance: stepSize, influenceRadius: p * 4,
+        maxIter: Math.min(2000, Math.ceil((2 * Math.hypot(W, H)) / stepSize)), rand,
+      });
+      let maxW = 0;
+      for (let i = 0; i < tree.width.length; i++) maxW = Math.max(maxW, tree.width[i]);
+      const widthAt = (i) => {
+        const base = maxW > 0 ? 0.3 + (P.veinThickness - 0.3) * (tree.width[i] / maxW) : P.veinThickness;
+        const q = pixOf(tree.xs[i], tree.ys[i]);
+        // the same 1.25 px pixel-center margin the circle grid's own cap uses
+        const cap = Math.max(0, 2 * (dOther[q] - 1.25 / k));
+        return Math.min(base, cap, P.veinThickness);
+      };
+      const mask = rasterizeVeins(tree, ww, wh, k, ky, widthAt);
+      for (let q = 0; q < NP; q++) if (lab[q] === l && mask[q]) vlab[q] = 0;
+      totalNodes += tree.xs.length;
+    }
+
+    const cuts2 = [];
+    for (let j = 0; j < nCut; j++) {
+      const C = new Uint8Array(NP);
+      for (let q = 0; q < NP; q++) C[q] = vlab[q] > j ? 1 : 0;
+      if (reg > 0 && j > 0) {
+        const ext = dilate(C, ww, wh, j * reg * k);
+        for (let q = 0; q < NP; q++) if (!C[q] && ext[q] && vlab[q] < j) C[q] = 1;
+      }
+      for (let q = 0; q < NP; q++) if (frame[q]) C[q] = 0;
+      cuts2.push(C);
+    }
+    const lays = [], ws = [];
+    let contours = 0;
+    for (let j = 0; j < nCut; j++) {
+      let C = cleanSheet(cuts2[j], debug);
+      C = finishSheet(bridgeSheet(C, debug), debug);
+      ws.push(measureWeb(C));
+      const holes = traceSheet(C);
+      contours += holes.length;
+      lays.push(holes);
+    }
+    const tp = (q, out) => { for (let d = 0; d < D; d++) out[d] = palette[vlab[q]][d]; };
+    return { layers: lays, webs: ws, tgtPix: tp, cellsLabel: `${totalNodes.toLocaleString()} branch points` };
   }
 }
 

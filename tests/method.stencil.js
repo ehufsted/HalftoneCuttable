@@ -184,6 +184,54 @@ export function run() {
       `mean cut diameter ${num(mean(left), 3)} mm on the dark side, ${num(mean(right), 3)} on the light`);
   }
 
+  // ---- halftone: vein fill (same disc as the circle-fill test above)
+  {
+    const im = makeRGBA(300, 200, (x, y) => {
+      const r = Math.hypot(x - 150, y - 100);
+      if (r > 75) return [0, 0, 0];
+      const v = Math.round(150 + 105 * (x - 75) / 150);
+      return [v, v, v];
+    });
+    const b = method.build(im, base, {
+      halftone: true, fillStyle: 'veins', veinPitch: 2.5, veinThickness: 1.2, seed: 1, smooth: 0,
+    });
+    const holes = b.layers[0];
+    const pieces = pieceCount({ ...b, kerf: base.kerf }, holes, PX);
+    // every finished vertex should stay within the disc (radius 15 mm at
+    // (30, 20)), plus a small margin for the kerf growth and the same
+    // pixel-center cap margin the circle fill uses
+    let outside = 0;
+    for (const hl of holes) {
+      for (let i = 0; i < hl.fx.length; i++) {
+        if (Math.hypot(hl.fx[i] - 30, hl.fy[i] - 20) > 15 + 1) outside++;
+      }
+    }
+    check('vein fill: branches, each inside its shape, the sheet one piece',
+      holes.length > 0 && holes.every((hl) => hl.kind === 'loop') && outside === 0 && pieces === 1 &&
+      b.webs[0] >= base.web - 1e-9,
+      `${holes.length} loops, ${outside} vertices outside the disc, ${pieces} piece(s), thinnest web ${num(b.webs[0], 3)} mm`);
+
+    // coverage over a band on the dark side (x in [17,23], 10 mm from center)
+    // vs the same-shaped band on the light side (x in [37,43]) -- wide enough
+    // that a few sparse branches average out, sampled from the sheet's own
+    // cut mask the same way the method built it
+    const { cuts, k } = b.debug;
+    const coverage = (x0, x1) => {
+      let metal = 0, total = 0;
+      for (let y = 10; y <= 30; y += 0.2) {
+        for (let x = x0; x <= x1; x += 0.2) {
+          const px = Math.round(x * k), py = Math.round(y * k);
+          total++;
+          if (!cuts[0][py * b.debug.ww + px]) metal++;
+        }
+      }
+      return metal / total;
+    };
+    const dark = coverage(17, 23), light = coverage(37, 43);
+    check('vein fill: darker tone grows denser veins', dark > light,
+      `metal coverage ${num(dark, 3)} on the dark side, ${num(light, 3)} on the light`);
+  }
+
   // ---- border: folded into the structural rim at the raster stage (not
   // dropped from the traced loops afterward), so a loop that merely grazes the
   // border is clipped, not thrown away whole.

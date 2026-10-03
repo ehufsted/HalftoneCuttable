@@ -17,6 +17,7 @@
 
 import { mulberry32 } from '../shim/random.js';
 import { SeedHash } from './voronoi.js';
+import { hilbertIndex, pow2At } from './hilbert.js';
 
 /** A growable bucket grid for "is anything within r of here?". */
 export class Crowd {
@@ -143,4 +144,138 @@ export function lloyd(xs, ys, rect, weightAt, res, iters, pinned, h) {
       ys[c] = Math.min(rect[3], Math.max(rect[1], sy[c] / sw[c]));
     }
   }
+}
+
+/**
+ * Tone-weighted point placement, shared by Stipple and anything else that
+ * wants "N points distributed like a density field, never closer than a
+ * minimum spacing": a stratified sample along a Hilbert curve (right count
+ * per region, well spread to start), weighted Lloyd relaxation at density
+ * `rho` (weight rho², since Lloyd settles at weight^(1/2)), then a spacing
+ * repair that pushes apart and, failing that, drops whatever is still too
+ * close. Extracted from `methods/stipple.js` verbatim -- behavior-preserving,
+ * checked against `tests/method.stipple.js`.
+ *
+ * @param {Float64Array|Float32Array} rho  density per work-pixel (row-major, ww×wh)
+ * @param {number} ww, wh    work-raster size
+ * @param {number} kx, ky    work-pixels per mm (so x_mm * kx = x_px)
+ * @param {number[]} rect    x0,y0,x1,y1 in mm: points stay inside
+ * @param {number} sMin      minimum center-to-center spacing, mm
+ * @param {number} relaxIters
+ * @param {() => number} rand  seeded RNG (mulberry32); call order matters
+ * @param {number} [maxPoints] throws if the exact count exceeds this
+ * @returns {{xs:Float64Array, ys:Float64Array, removed:number, N0:number, pixOf:(x,y)=>number}}
+ */
+export function placeWeightedPoints(rho, ww, wh, kx, ky, rect, sMin, relaxIters, rand, maxPoints = Infinity) {
+  const NP = ww * wh, pixA = 1 / (kx * ky);
+  const pixOf = (x, y) => Math.min(wh - 1, Math.max(0, Math.floor(y * ky))) * ww +
+    Math.min(ww - 1, Math.max(0, Math.floor(x * kx)));
+
+  let M = 0;
+  for (let q = 0; q < NP; q++) M += rho[q] * pixA;
+  const N0 = Math.round(M);
+  if (N0 > maxPoints) throw new Error(`${N0} points is too many`);
+  const n2 = pow2At(Math.max(ww, wh));
+  const key = new Float64Array(NP);
+  for (let j = 0; j < wh; j++) for (let i = 0; i < ww; i++) key[j * ww + i] = hilbertIndex(n2, i, j);
+  const order = Array.from({ length: NP }, (_, q) => q).sort((a, b) => key[a] - key[b]);
+  let xs = new Float64Array(N0), ys = new Float64Array(N0);
+  {
+    let acc = 0, k = 0, next = N0 > 0 ? (rand() * M) / N0 : Infinity;
+    for (const q of order) {
+      acc += rho[q] * pixA;
+      while (k < N0 && next <= acc) {
+        const i = q % ww, j = (q - i) / ww;
+        xs[k] = Math.min(rect[2], Math.max(rect[0], (i + rand()) / kx));
+        ys[k] = Math.min(rect[3], Math.max(rect[1], (j + rand()) / ky));
+        k++;
+        next = ((k + rand()) * M) / N0;
+      }
+    }
+    for (; k < N0; k++) { xs[k] = (rect[0] + rect[2]) / 2; ys[k] = (rect[1] + rect[3]) / 2; }   // rounding stragglers
+  }
+
+  lloyd(xs, ys, rect, (x, y) => rho[pixOf(x, y)] ** 2, 6 / sMin, relaxIters, null, 2 * sMin);
+
+  const spaced = enforceSpacing(xs, ys, rect, sMin, rand);
+  return { xs: spaced.xs, ys: spaced.ys, removed: spaced.removed, N0, pixOf };
+}
+
+/**
+ * Push apart every pair of points closer than sMin, then drop what still will
+ * not separate. Greedy in index order: pairs are visited as (i, j > i) with i
+ * ascending, so drop[i] is final by the time i's pairs come up, and a kept i
+ * drops every j that crowds it. No two survivors end up closer than sMin.
+ * @returns {{xs:Float64Array, ys:Float64Array, removed:number}}
+ */
+export function enforceSpacing(xs, ys, rect, sMin, rand) {
+  const tooClose = (fn) => {
+    const hash = new SeedHash(xs, ys, rect[0], rect[1], rect[2], rect[3], sMin);
+    for (let i = 0; i < xs.length; i++) {
+      const [ix, iy] = hash.bucketOf(xs[i], ys[i]);
+      for (let r = 0; r <= 1; r++) {
+        hash.ring(ix, iy, r, (j) => {
+          if (j <= i) return;
+          const dx = xs[j] - xs[i], dy = ys[j] - ys[i];
+          const dist = Math.hypot(dx, dy);
+          if (dist < sMin - 1e-9) fn(i, j, dx, dy, dist);
+        });
+      }
+    }
+  };
+  for (let pass = 0; pass < 30; pass++) {
+    let moved = false;
+    tooClose((i, j, dx, dy, dist) => {
+      moved = true;
+      if (dist < 1e-12) { const a = rand() * 2 * Math.PI; dx = Math.cos(a); dy = Math.sin(a); dist = 1; }
+      const push = (sMin - Math.hypot(xs[j] - xs[i], ys[j] - ys[i])) / 2 + 1e-6;
+      if (push <= 0) return;
+      const ux = dx / dist, uy = dy / dist;
+      xs[i] = Math.min(rect[2], Math.max(rect[0], xs[i] - ux * push));
+      ys[i] = Math.min(rect[3], Math.max(rect[1], ys[i] - uy * push));
+      xs[j] = Math.min(rect[2], Math.max(rect[0], xs[j] + ux * push));
+      ys[j] = Math.min(rect[3], Math.max(rect[1], ys[j] + uy * push));
+    });
+    if (!moved) break;
+  }
+  const drop = new Uint8Array(xs.length);
+  tooClose((i, j) => { if (!drop[i]) drop[j] = 1; });
+  const keep = [];
+  for (let i = 0; i < xs.length; i++) if (!drop[i]) keep.push(i);
+  return {
+    xs: Float64Array.from(keep, (i) => xs[i]),
+    ys: Float64Array.from(keep, (i) => ys[i]),
+    removed: xs.length - keep.length,
+  };
+}
+
+/**
+ * Which sheet each of N discrete points (dots, vein nodes, ...) shows in color
+ * mode: walk them in Hilbert order and pay each sheet the share of it (its own
+ * target mix fraction at that point) it is owed, via 1-D error diffusion along
+ * the curve -- spreads each color evenly instead of clumping. Extracted from
+ * `methods/stipple.js`'s original `assignSheets`, which now calls this.
+ *
+ * @param {number} N
+ * @param {number} n  palette size (sheet 0 is the base/no-color point)
+ * @param {(i:number, out:Float64Array) => void} mixAt  fills out[0..n-1] with point i's target mix
+ * @param {(i:number) => number} hilbertKeyOf
+ * @returns {Uint8Array} lab[i] = sheet index point i shows (>= 1)
+ */
+export function assignSheetsByMix(N, n, mixAt, hilbertKeyOf) {
+  const lab = new Uint8Array(N).fill(1);
+  if (n <= 2) return lab;    // only one non-base sheet: nothing to choose between
+  const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => hilbertKeyOf(a) - hilbertKeyOf(b));
+  const debt = new Float64Array(n), m = new Float64Array(n);
+  for (const i of order) {
+    mixAt(i, m);
+    let tot = 0;
+    for (let l = 1; l < n; l++) tot += m[l];
+    if (tot > 0) for (let l = 1; l < n; l++) debt[l] += m[l] / tot;
+    let best = 1;
+    for (let l = 2; l < n; l++) if (debt[l] > debt[best]) best = l;
+    lab[i] = best;
+    debt[best] -= 1;
+  }
+  return lab;
 }

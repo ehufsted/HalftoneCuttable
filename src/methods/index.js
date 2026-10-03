@@ -25,8 +25,9 @@ import stencil from './stencil.js';
 import screen from './screen.js';
 import facets from './facets.js';
 import rectangles from './rectangles.js';
+import veinWeb from './veinWeb.js';
 
-export const METHODS = [squareGrid, hexGrid, voronoiWeb, facets, rectangles, stipple, stencil, screen];
+export const METHODS = [squareGrid, hexGrid, voronoiWeb, facets, rectangles, stipple, stencil, screen, veinWeb];
 
 export const byId = (id) => METHODS.find((m) => m.id === id) || METHODS[0];
 

@@ -206,7 +206,7 @@ export function run() {
     const bad = [];
     let runs = 0;
     for (const [name, img] of [['ramp', ramp], ['busy', busy]]) {
-      for (const screen of ['lines', 'waves', 'concentric', 'spiral', 'flowLic', 'turing']) {
+      for (const screen of ['lines', 'waves', 'concentric', 'spiral', 'flowLic', 'turing', 'veins']) {
         const b = method.build(img, base, { screen, period: 3 });
         const holes = b.layers[0];
         const pieces = pieceCount({ ...b, kerf: base.kerf }, holes, PX);
@@ -318,6 +318,37 @@ export function run() {
     check('color: the deeper sheet’s slots lie inside the top sheet’s', deep > 0 && outside / deep < 0.01,
       `${num(100 * outside / Math.max(1, deep), 2)}% of its cut outside, ${deep} px cut`);
     check('color: every sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
+  }
+
+  // ---- veins: a branch's own cross-section nests colors (the fix for the
+  // per-node label scheme, which collided whenever a shape's label was ALSO
+  // the deepest one -- always true for B&W, and for any solid-colored branch
+  // in color mode): every sheet thresholds the SAME continuous screen field,
+  // just at its own (smaller, for a deeper sheet) cumulative open fraction,
+  // so a deeper sheet's SOLID region is the bigger one, containing every
+  // shallower sheet's -- wherever the top sheet stays solid, every deeper one
+  // must too.
+  {
+    const s = { ...base, mode: 'color', palette: ['#202020', '#d02020', '#2040d0'], reg: 0.2 };
+    const b = method.build(makeRGBA(150, 100, () => [120, 60, 150]), s, { screen: 'veins', period: 4, veinWidth: 2, seed: 2 });
+    const [C0, C1] = b.debug.cuts;
+    // the deeper sheet's cumulative open fraction is the SMALLER one (it only
+    // counts area needing even more cutting), so its cut region is the
+    // smaller, nested one -- meaning wherever the TOP sheet stays solid, the
+    // deeper one must stay solid too (its solid region is the bigger one).
+    let topSolid = 0, notAlsoDeep = 0;
+    for (let i = 0; i < C0.length; i++) if (!C0[i]) { topSolid++; if (C1[i]) notAlsoDeep++; }
+    check('veins: wherever the top sheet is solid, the deeper sheet is too (nested rings, not labels)',
+      topSolid > 0 && notAlsoDeep === 0,
+      `${topSolid} px solid on the top sheet, ${notAlsoDeep} of them cut on the deeper sheet`);
+    const pieces = b.layers.map((L) => pieceCount({ ...b, kerf: s.kerf }, L, PX));
+    check('veins: every sheet is one piece', pieces.every((p) => p === 1), pieces.join(', '));
+
+    const a = method.build(makeRGBA(60, 60, () => [120, 60, 150]), base, { screen: 'veins', period: 3, seed: 5 });
+    const c = method.build(makeRGBA(60, 60, () => [120, 60, 150]), base, { screen: 'veins', period: 3, seed: 5 });
+    const d = method.build(makeRGBA(60, 60, () => [120, 60, 150]), base, { screen: 'veins', period: 3, seed: 6 });
+    const key = (x) => x.layers[0].slice(0, 20).map((L) => L.xs[0].toFixed(5)).join(',');
+    check('veins: same seed, same pattern; another seed, another', key(a) === key(c) && key(a) !== key(d));
   }
 
   // ---- flow lines: direction follows the image's own structure, spacing

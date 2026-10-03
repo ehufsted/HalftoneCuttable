@@ -43,7 +43,7 @@ import { mulberry32 } from '../shim/random.js';
 import { luminance } from '../core/color.js';
 import { solveMix, fitMix, mixColor } from '../core/separate.js';
 import { SeedHash } from '../core/voronoi.js';
-import { lloyd } from '../core/seeds.js';
+import { placeWeightedPoints, assignSheetsByMix } from '../core/seeds.js';
 import { hilbertIndex, pow2At } from '../core/hilbert.js';
 
 export const id = 'stipple';
@@ -109,43 +109,18 @@ export function build(rgba, settings, params = {}) {
   const pixOf = (x, y) => Math.min(wh - 1, Math.max(0, Math.floor(y * ky))) * ww +
     Math.min(ww - 1, Math.max(0, Math.floor(x * kx)));
 
-  // ---- 1. stratified sample along the Hilbert curve
+  // ---- 1-3. stratified Hilbert sample, weighted Lloyd relax, spacing repair
+  const n2 = pow2At(Math.max(ww, wh));
+  const rand = mulberry32(P.seed | 0);
   let M = 0;
   for (let q = 0; q < NP; q++) M += rho[q] * pixA;
-  const N0 = Math.round(M);
-  if (N0 > MAX_DOTS) throw new Error(`${N0} dots is too many — raise the dot size`);
-  const n2 = pow2At(Math.max(ww, wh));
-  const key = new Float64Array(NP);
-  for (let j = 0; j < wh; j++) for (let i = 0; i < ww; i++) key[j * ww + i] = hilbertIndex(n2, i, j);
-  const order = Array.from({ length: NP }, (_, q) => q).sort((a, b) => key[a] - key[b]);
-  const rand = mulberry32(P.seed | 0);
-  let xs = new Float64Array(N0), ys = new Float64Array(N0);
-  {
-    let acc = 0, k = 0, next = N0 > 0 ? (rand() * M) / N0 : Infinity;
-    for (const q of order) {
-      acc += rho[q] * pixA;
-      while (k < N0 && next <= acc) {
-        const i = q % ww, j = (q - i) / ww;
-        xs[k] = Math.min(rect[2], Math.max(rect[0], (i + rand()) / kx));
-        ys[k] = Math.min(rect[3], Math.max(rect[1], (j + rand()) / ky));
-        k++;
-        next = ((k + rand()) * M) / N0;
-      }
-    }
-    for (; k < N0; k++) { xs[k] = (rect[0] + rect[2]) / 2; ys[k] = (rect[1] + rect[3]) / 2; }   // rounding stragglers
-  }
-
-  // ---- 2. relax towards blue noise at density rho
-  lloyd(xs, ys, rect, (x, y) => rho[pixOf(x, y)] ** 2, 6 / sMin, P.relax, null, 2 * sMin);
-
-  // ---- 3. enforce the spacing: push apart, then drop what will not separate
-  const spaced = enforceSpacing(xs, ys, rect, sMin, rand);
-  xs = spaced.xs; ys = spaced.ys;
-  const removed = spaced.removed;
+  if (Math.round(M) > MAX_DOTS) throw new Error(`${Math.round(M)} dots is too many — raise the dot size`);
+  const placed = placeWeightedPoints(rho, ww, wh, kx, ky, rect, sMin, P.relax, rand);
+  const xs = placed.xs, ys = placed.ys, removed = placed.removed, N0 = placed.N0;
   const N = xs.length;
 
   // ---- which sheet each dot shows
-  const lab = assignSheets(xs, ys, N, n, nCut, n2, ww, wh, kx, ky, pixOf, mixPix);
+  const lab = assignSheets(xs, ys, N, n, n2, ww, wh, kx, ky, pixOf, mixPix);
 
   // ---- holes: sheet j is holed under every dot showing a deeper sheet
   const diam = (j) => d + 2 * j * reg;
@@ -232,78 +207,19 @@ export function build(rgba, settings, params = {}) {
 }
 
 /**
- * Push apart every pair of dots closer than sMin, then drop what still will
- * not separate. Greedy in index order: pairs are visited as (i, j > i) with i
- * ascending, so drop[i] is final by the time i's pairs come up, and a kept i
- * drops every j that crowds it. No two survivors end up closer than sMin.
- * @returns {{xs:Float64Array, ys:Float64Array, removed:number}}
- */
-function enforceSpacing(xs, ys, rect, sMin, rand) {
-  const tooClose = (fn) => {
-    const hash = new SeedHash(xs, ys, rect[0], rect[1], rect[2], rect[3], sMin);
-    for (let i = 0; i < xs.length; i++) {
-      const [ix, iy] = hash.bucketOf(xs[i], ys[i]);
-      for (let r = 0; r <= 1; r++) {
-        hash.ring(ix, iy, r, (j) => {
-          if (j <= i) return;
-          const dx = xs[j] - xs[i], dy = ys[j] - ys[i];
-          const dist = Math.hypot(dx, dy);
-          if (dist < sMin - 1e-9) fn(i, j, dx, dy, dist);
-        });
-      }
-    }
-  };
-  for (let pass = 0; pass < 30; pass++) {
-    let moved = false;
-    tooClose((i, j, dx, dy, dist) => {
-      moved = true;
-      if (dist < 1e-12) { const a = rand() * 2 * Math.PI; dx = Math.cos(a); dy = Math.sin(a); dist = 1; }
-      const push = (sMin - Math.hypot(xs[j] - xs[i], ys[j] - ys[i])) / 2 + 1e-6;
-      if (push <= 0) return;
-      const ux = dx / dist, uy = dy / dist;
-      xs[i] = Math.min(rect[2], Math.max(rect[0], xs[i] - ux * push));
-      ys[i] = Math.min(rect[3], Math.max(rect[1], ys[i] - uy * push));
-      xs[j] = Math.min(rect[2], Math.max(rect[0], xs[j] + ux * push));
-      ys[j] = Math.min(rect[3], Math.max(rect[1], ys[j] + uy * push));
-    });
-    if (!moved) break;
-  }
-  const drop = new Uint8Array(xs.length);
-  tooClose((i, j) => { if (!drop[i]) drop[j] = 1; });
-  const keep = [];
-  for (let i = 0; i < xs.length; i++) if (!drop[i]) keep.push(i);
-  return {
-    xs: Float64Array.from(keep, (i) => xs[i]),
-    ys: Float64Array.from(keep, (i) => ys[i]),
-    removed: xs.length - keep.length,
-  };
-}
-
-/**
- * Which sheet each dot shows: walk the dots in Hilbert order and pay each
- * sheet the share it is owed under it (1-D error diffusion along the curve),
- * which spreads each color evenly.
+ * Which sheet each dot shows (see core/seeds.js's assignSheetsByMix): dots are
+ * ordered by the Hilbert key of their own raster pixel, and each one's "mix"
+ * is that pixel's target mix, looked up by `pixOf`.
  * @returns {Uint8Array} lab[i] = sheet index dot i shows (>= 1)
  */
-function assignSheets(xs, ys, N, n, nCut, n2, ww, wh, kx, ky, pixOf, mixPix) {
-  const lab = new Uint8Array(N).fill(1);
-  if (nCut > 1) {
-    const hk = Float64Array.from({ length: N }, (_, i) =>
-      hilbertIndex(n2, Math.min(ww - 1, Math.floor(xs[i] * kx)), Math.min(wh - 1, Math.floor(ys[i] * ky))));
-    const dotOrder = Array.from({ length: N }, (_, i) => i).sort((a, b) => hk[a] - hk[b]);
-    const debt = new Float64Array(n);
-    for (const i of dotOrder) {
-      const q = pixOf(xs[i], ys[i]);
-      let tot = 0;
-      for (let l = 1; l < n; l++) tot += mixPix[q * n + l];
-      if (tot > 0) for (let l = 1; l < n; l++) debt[l] += mixPix[q * n + l] / tot;
-      let best = 1;
-      for (let l = 2; l < n; l++) if (debt[l] > debt[best]) best = l;
-      lab[i] = best;
-      debt[best] -= 1;
-    }
-  }
-  return lab;
+function assignSheets(xs, ys, N, n, n2, ww, wh, kx, ky, pixOf, mixPix) {
+  const hilbertKeyOf = (i) =>
+    hilbertIndex(n2, Math.min(ww - 1, Math.floor(xs[i] * kx)), Math.min(wh - 1, Math.floor(ys[i] * ky)));
+  const mixAt = (i, out) => {
+    const q = pixOf(xs[i], ys[i]);
+    for (let l = 0; l < n; l++) out[l] = mixPix[q * n + l];
+  };
+  return assignSheetsByMix(N, n, mixAt, hilbertKeyOf);
 }
 
 /** The thinnest web each cut sheet leaves: to the outline, and between every

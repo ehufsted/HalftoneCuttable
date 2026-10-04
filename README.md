@@ -61,7 +61,10 @@ Seven patterns:
   map. The levels are spaced evenly over the brightness range found in that
   color's region, either *even as seen* (encoded) or *even in linear light*. In
   B&W only the metal sheet gets them. They are held together by bridges, or cut
-  free to glue down, the same as the stencil's own sheets. Seen straight on, a
+  free to glue down, the same as the stencil's own sheets. *Keep bridges on the
+  sheet below* (color, or with brightness layers) routes every bridge over metal
+  of the sheet beneath it, so each bridge can be glued down and none spans a
+  hole; a part with no such route is cut free to glue down instead. Seen straight on, a
   brightness layer is the same color as the sheet under it, so the Result view
   outlines each one in a faded version of its color.
 - **Screen:** the image compared against a repeating pattern: straight or wavy lines

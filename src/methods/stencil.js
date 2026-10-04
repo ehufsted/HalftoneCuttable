@@ -25,6 +25,11 @@
 //      straight bridges, in directions at least 90° apart (or opposite, for the
 //      horizontal and vertical styles), to whatever other metal is nearest; then
 //      any cluster still not joined to the frame gets one more, until all are.
+//      KEEP BRIDGES ON THE SHEET BELOW (checkbox): a bridge may only cross the
+//      cut where the sheet directly beneath is metal, so every bridge can be
+//      glued down and none spans a hole. Sheets are finished from the bottom
+//      of the stack up, so that metal is known; a part with no such route is
+//      cut free to glue down instead, and the note says how many.
 //   5. TRACE. The cut's signed distance is contoured at -kerf/2 -- the cut path,
 //      offset for the kerf with sub-pixel accuracy -- and simplified.
 //
@@ -76,6 +81,9 @@ export const params = [
     when: (p) => !p.halftone && !p.floating },
   { key: 'bridgeWidth', label: 'Bridge width', type: 'range', min: 0.3, max: 5, step: 0.1, def: 1.2, unit: 'mm', dp: 1,
     when: (p) => !p.halftone && !p.floating },
+  // only where a sheet lies beneath: color sheets, and brightness layers
+  { key: 'supported', label: 'Keep bridges on the sheet below', type: 'checkbox', def: false,
+    when: (p, env) => !p.halftone && !p.floating && (env.mode === 'color' || p.levels > 0) },
   { key: 'levels', label: 'Brightness layers per color', type: 'range', min: 0, max: 8, step: 1, def: 0,
     when: (p) => !p.halftone },
   { key: 'levelSpace', label: 'Level spacing', type: 'select', def: 'encoded',
@@ -139,42 +147,73 @@ export function build(rgba, settings, params = {}) {
   }
 
   const notes = [];
-  const debug = { k, ww, wh, lab, bridges: [], fallback: 0, unresolved: 0, specks: 0, floating: 0 };
+  const debug = { k, ww, wh, lab, bridges: [], fallback: 0, unresolved: 0, unsupported: 0, specks: 0, floating: 0 };
   const { cleanSheet, bridgeSheet, finishSheet, measureWeb, traceSheet } = sheetTools({
     ww, wh, k, ky, frame, web, hFloor, kerf, bridgeWidth: P.bridgeWidth, bridgeStyle: P.bridges,
   });
   let layers, webs, cellsLabel, tgtPix, levels = [];
 
   if (!P.halftone) {
-    // the brightness layers start from each sheet's RAW cut, before cleanup;
-    // cleanSheet makes a new raster, so keeping the old references is enough
-    const rawCuts = P.levels > 0 ? cuts.slice() : null;
-    // ---- 3-5, per sheet
+    // the brightness layers start from each sheet's RAW cut, before cleanup
+    const ldbg = { bridges: [], fallback: 0, unresolved: 0, unsupported: 0, specks: 0, floating: 0, cores: [] };
+    const plan = P.levels > 0 ? planLevels(cuts, ldbg) : null;
+    // ---- 3-5, per sheet, from the bottom of the stack up, so that with
+    // "keep bridges on the sheet below" each sheet's bridges can be confined to
+    // the finished metal of the sheet beneath it (the solid base in color; in
+    // B&W nothing lies under the sheet but the backdrop). Each sheet is
+    // otherwise finished on its own, so the order changes nothing else.
+    const bridgeR = (Math.max(P.bridgeWidth, web) / 2) * k;
+    const finish = (C0, dbg, below) => {
+      let C = cleanSheet(C0, dbg);
+      if (P.floating) {
+        dbg.floating += Math.max(0, components(invert(C), ww, wh).sizes.length - 1);
+        return { C, web };          // every feature is at least the web wide by step 3
+      }
+      // the centerline over the metal below shrunk by the bridge's half-width:
+      // the whole width then rests on it
+      const allow = P.supported && below ? erode(below, ww, wh, bridgeR) : null;
+      const before = dbg.unsupported;
+      const bridged = bridgeSheet(C, dbg, allow);
+      const freed = dbg.unsupported > before;
+      C = finishSheet(bridged, dbg, freed);                // slivers the bridges left
+      // parts cut free to glue down are not connections: the web is the cleanup's
+      return { C, web: freed ? web : measureWeb(C) };
+    };
+    const main = new Array(nCut), lv = plan ? new Array(plan.sheets.length) : [];
+    let below = bw ? null : new Uint8Array(NP).fill(1);
+    for (let l = bw ? 0 : nCut; l >= 0; l--) {
+      if (l < nCut) { main[l] = finish(cuts[l], debug, below); below = invert(main[l].C); }
+      if (!plan) continue;
+      // this color's layers, lowest level first (the plan is top level first)
+      for (let i = plan.sheets.length - 1; i >= 0; i--) {
+        if (plan.sheets[i].color !== l) continue;
+        lv[i] = finish(plan.sheets[i].C, ldbg, below);
+        below = invert(lv[i].C);
+      }
+    }
     layers = []; webs = [];
     let contours = 0;
     for (let j = 0; j < nCut; j++) {
-      let C = cleanSheet(cuts[j], debug);
-      if (!P.floating) {
-        C = finishSheet(bridgeSheet(C, debug), debug);   // slivers the bridges left
-        webs.push(measureWeb(C));
-      } else {
-        const M = invert(C);
-        debug.floating += Math.max(0, components(M, ww, wh).sizes.length - 1);
-        webs.push(web);      // every feature is at least the web wide by step 3
-      }
-      cuts[j] = C;
-      const holes = traceSheet(C);
+      cuts[j] = main[j].C;
+      const holes = traceSheet(main[j].C);
       contours += holes.length;
       layers.push(holes);
+      webs.push(main[j].web);
     }
     cellsLabel = `${contours.toLocaleString()} contours`;
     tgtPix = (q, out) => { for (let d = 0; d < D; d++) out[d] = palette[lab[q]][d]; };
     if (debug.bridges.length) notes.push(`${debug.bridges.length} bridges`);
     if (debug.fallback) notes.push(`${debug.fallback} parts could not be bridged ${P.bridges} and were bridged at an angle`);
     if (debug.unresolved) notes.push(`${debug.unresolved} parts could NOT be bridged — they will fall out`);
+    if (debug.unsupported) notes.push(`${debug.unsupported} parts could not be bridged over the sheet below — cut free to glue down`);
     if (debug.floating) notes.push(`${debug.floating} floating parts to glue down`);
     if (debug.specks) notes.push(`${debug.specks} metal specks too small to hold were cut away`);
-    if (rawCuts) levels = brightnessLayers(rawCuts);
+    if (plan) {
+      levels = plan.sheets.map((p, i) => ({
+        color: p.color, level: p.level, of: p.of, value: p.value, range: p.range, holes: traceSheet(lv[i].C), web: lv[i].web,
+      }));
+      levelNotes(levels, plan.flat, ldbg);
+    }
   } else {
     ({ layers, webs, tgtPix, cellsLabel } = halftoneShapes());
   }
@@ -201,12 +240,14 @@ export function build(rgba, settings, params = {}) {
   // helpers (closures over the raster)
 
   /**
-   * The brightness layers: per color, N sheets cut along isocontours of the
-   * luminance inside that color's region (see the header). Their bridges and
-   * counts are kept apart from the main sheets', so those notes do not change.
-   * @returns {Array<{color, level, of, value, range, holes, web}>} stack order
+   * The brightness layers' raw cuts: per color, N sheets cut along isocontours
+   * of the luminance inside that color's region (see the header). Finished with
+   * the main sheets, from the bottom up, in build().
+   * @returns {{sheets: Array<{color, level, of, value, range, C}>, flat: number[]}}
+   *   sheets in stack order (color by color, top level first); flat: the colors
+   *   whose region is empty or flat
    */
-  function brightnessLayers(rawCuts) {
+  function planLevels(rawCuts, dbg) {
     const N = Math.round(P.levels);
     const enc = P.levelSpace !== 'linear';
     const val0 = new Float32Array(NP);
@@ -215,8 +256,7 @@ export function build(rgba, settings, params = {}) {
       const c = Math.max(0, Math.min(1, luminance(pr[q], pg[q], pb[q])));
       val0[q] = enc ? encodeFast(c) : c;
     }
-    const dbg = { bridges: [], fallback: 0, unresolved: 0, specks: 0, floating: 0, cores: [] };
-    const out = [], flat = [];
+    const sheets = [], flat = [];
     // B&W: only the metal sheet is a material; the "white" is the backdrop
     for (let l = 0; l < (bw ? 1 : n); l++) {
       const { val, core } = regionField(val0, l);
@@ -228,21 +268,19 @@ export function build(rgba, settings, params = {}) {
       // top level first: the smallest, brightest sheet sits highest
       for (let i = N; i >= 1; i--) {
         const t = lo + ((hi - lo) * i) / (N + 1);
-        let C = new Uint8Array(NP);
+        const C = new Uint8Array(NP);
         for (let q = 0; q < NP; q++) {
           C[q] = !frame[q] && ((own && own[q]) || (lab[q] === l && val[q] < t)) ? 1 : 0;
         }
-        C = cleanSheet(C, dbg);
-        let w = web;
-        if (!P.floating) {
-          C = finishSheet(bridgeSheet(C, dbg), dbg);
-          w = measureWeb(C);
-        } else {
-          dbg.floating += Math.max(0, components(invert(C), ww, wh).sizes.length - 1);
-        }
-        out.push({ color: l, level: i, of: N, value: t, range: [lo, hi], holes: traceSheet(C), web: w });
+        sheets.push({ color: l, level: i, of: N, value: t, range: [lo, hi], C });
       }
     }
+    debug.levels = dbg;
+    return { sheets, flat };
+  }
+
+  /** The brightness layers' notes: their count, and the main sheets' warnings, said of them. */
+  function levelNotes(out, flat, dbg) {
     if (out.length) {
       const what = `${out.length} brightness layer${out.length === 1 ? '' : 's'}`;
       notes.push(dbg.bridges.length ? `${what} (${dbg.bridges.length} bridges)` : what);
@@ -252,13 +290,11 @@ export function build(rgba, settings, params = {}) {
       const why = bw ? 'flat' : 'empty or flat';
       notes.push(`no brightness layers for ${which}: ${flat.length > 1 ? 'their regions are' : 'its region is'} ${why}`);
     }
-    // the same warnings as the main sheets', said of the layers
     if (dbg.fallback) notes.push(`${dbg.fallback} parts of the brightness layers could not be bridged ${P.bridges} and were bridged at an angle`);
     if (dbg.unresolved) notes.push(`${dbg.unresolved} parts of the brightness layers could NOT be bridged — they will fall out`);
+    if (dbg.unsupported) notes.push(`${dbg.unsupported} parts of the brightness layers could not be bridged over the sheet below — cut free to glue down`);
     if (dbg.floating) notes.push(`${dbg.floating} floating parts in the brightness layers to glue down`);
     if (dbg.specks) notes.push(`${dbg.specks} metal specks in the brightness layers too small to hold were cut away`);
-    debug.levels = dbg;
-    return out;
   }
 
   /**

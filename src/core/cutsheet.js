@@ -130,9 +130,11 @@ export function sheetTools(ctx) {
    * opening can strand a single metal pixel between two cut discs; found as
    * three 0.16 mm flecks on a Turing screen, where the web check read 0 mm.
    * Anything loose and larger than a speck is left alone and counted as
-   * unresolved, so it shows up instead of being quietly cut away.
+   * unresolved, so it shows up instead of being quietly cut away -- unless
+   * `freed`: bridgeSheet has cut parts free on purpose, to glue down, and
+   * counted them itself.
    */
-  function finishSheet(C0, dbg) {
+  function finishSheet(C0, dbg, freed = false) {
     // Filling a cut THROAT narrower than the smallest hole turns it into a metal
     // wall only as thick as the throat was long -- found as necks of 0.64 mm on a
     // Turing photo with a 0.8 mm web, whose traced outlines then crossed. So the
@@ -141,7 +143,7 @@ export function sheetTools(ctx) {
     const C = invert(M);
     const { id, sizes, frameId, speck, drop } = specksOf(M);
     for (let q = 0; q < NP; q++) if (id[q] >= 0 && drop[id[q]]) C[q] = 1;
-    dbg.unresolved += sizes.filter((sz, c) => c !== frameId && sz >= speck).length;
+    if (!freed) dbg.unresolved += sizes.filter((sz, c) => c !== frameId && sz >= speck).length;
     return C;
   }
 
@@ -156,8 +158,14 @@ export function sheetTools(ctx) {
     return C;
   }
 
-  /** Step 4: join every core component of the metal to the frame. */
-  function bridgeSheet(C, dbg) {
+  /**
+   * Step 4: join every core component of the metal to the frame. With `allow`
+   * (1 where a bridge's centerline may cross the cut), a bridge may not cross
+   * the cut anywhere else -- the stencil's "keep bridges on the sheet below" --
+   * and a part left with no route is counted in dbg.unsupported (to glue
+   * down) instead of dbg.unresolved.
+   */
+  function bridgeSheet(C, dbg, allow = null) {
     const M = invert(C);
     const rc = Math.max(0.5, (web / 2) * k - 1);
     const dC = edt(C, ww, wh);
@@ -190,8 +198,9 @@ export function sheetTools(ctx) {
       while (steps < maxSteps) {
         x += dx; y += dy; steps++;
         if (x < 0 || y < 0 || x >= ww || y >= wh) return null;
-        const cid = id[y * ww + x];
+        const q = y * ww + x, cid = id[q];
         if (cid === c) { sx = x; sy = y; steps = 0; continue; }
+        if (allow && C[q] && !allow[q]) return null;      // over a hole in the sheet below
         if (cid >= 0 && !avoid(cid)) {
           return { x0: sx, y0: sy, x1: x, y1: y, len: steps * Math.hypot(dx, dy), target: cid, dx, dy };
         }
@@ -265,7 +274,7 @@ export function sheetTools(ctx) {
       const r = find(c);
       if (r !== find(frameId) && !seen.has(r)) { seen.add(r); left++; }
     }
-    dbg.unresolved += left;
+    if (allow) dbg.unsupported += left; else dbg.unresolved += left;
     const out = invert(M);
     for (let q = 0; q < NP; q++) if (frame[q]) out[q] = 0;
     return out;

@@ -136,6 +136,22 @@ export function run() {
       `${pieces} piece(s), ${thick} when shrunk, ${b.debug.levels.bridges.length} bridges for 3 islands`);
     check('the layers’ bridges are kept apart from the main sheet’s', b.debug.bridges.length === 0 && /brightness layer \(\d+ bridges\)/.test(b.note),
       b.note);
+    // two levels: the top level's discs sit on the lower level's, with cut
+    // ground round them. With "keep bridges on the sheet below" the top level's
+    // bridges may only cross that ground over the lower level's metal -- here,
+    // its own bridges, which the top level's then lie on.
+    const sup = method.build(img, base, { levels: 2, supported: true });
+    const [top2, low2] = sup.levels;
+    const lowMetal = metal(sup, low2.holes);
+    const topBridges = sup.debug.levels.bridges.slice(-6);           // finished bottom-up: the top level's come last
+    let overCut = 0;
+    for (const br of topBridges) {
+      for (let t = 0; t <= 20; t++) if (!lowMetal.at(br.x0 + ((br.x1 - br.x0) * t) / 20, br.y0 + ((br.y1 - br.y0) * t) / 20)) overCut++;
+    }
+    const pieces2 = [top2, low2].map((lv) => pieceCount({ ...sup, kerf: base.kerf }, lv.holes, PX));
+    check('keep bridges on the sheet below: the top level’s bridges rest on the lower level’s metal, both levels one piece',
+      sup.debug.levels.bridges.length === 12 && overCut === 0 && pieces2.every((p) => p === 1) && sup.debug.levels.unsupported === 0,
+      `${overCut} of ${topBridges.length * 21} top-level bridge samples over a hole, ${pieces2.join(', ')} piece(s)`);
     const f = method.build(img, base, { levels: 1, floating: true });
     const fp = pieceCount({ ...f, kerf: base.kerf }, f.levels[0].holes, PX);
     check('floating parts: no bridges, each island its own piece', fp === 4 && f.debug.levels.floating === 3 && f.debug.levels.bridges.length === 0,

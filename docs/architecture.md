@@ -239,6 +239,14 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
   gets bridged. The harness's structure check shrinks the traced sheet the same way
   before its flood fill, so "one piece" there means every connection is at least
   the web wide.
+- **Keep bridges on the sheet below** finishes the sheets from the bottom of the
+  stack up, so each sheet's bridges can be confined to the finished metal of the
+  sheet beneath. A bridge's centerline may cross the cut only over that metal,
+  shrunk by the bridge's half-width, so its whole width rests on it. Bridges
+  then often stack on the bridges below, cast along the same rays, which is
+  correct: they rest on metal. Each sheet is otherwise finished on its own, so
+  with the option off the order changes nothing (the harness transcript is
+  identical). A part with no route is cut free, and is not counted as loose metal.
 - **Bridges are straight rays** from a part's boundary, two per part, at least 90°
   apart (opposite for the horizontal and vertical styles). If the chosen style has
   no path, the app falls back to any angle and says so in the note. Clusters still

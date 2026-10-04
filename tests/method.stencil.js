@@ -133,6 +133,55 @@ export function run() {
     check('color: each region shows its own sheet', err / (b.N * 3) < 0.02, `mean |Δ| ${num(err / (b.N * 3), 4)} (linear)`);
   }
 
+  // ---- keep bridges on the sheet below: a dark island inside a ring, red on
+  // top and blue below. The top sheet's bridges to the island cross the ring;
+  // the red sheet beneath is cut where the ring is blue, so only bridges over
+  // the red half rest on metal.
+  {
+    const pal = ['#202020', '#d02020', '#2040d0'];
+    const s = { ...base, mode: 'color', palette: pal, reg: 0 };
+    const img = makeRGBA(300, 200, (x, y) => {
+      const r = Math.hypot(x - 150, y - 100);
+      if (r >= 20 && r <= 40) return y < 100 ? [208, 32, 32] : [32, 64, 208];
+      return [32, 32, 32];
+    });
+    const overBlue = (b) => {
+      const { lab, k, ww, wh } = b.debug, ky = wh / b.heightMm;
+      let n = 0;
+      for (const br of b.debug.bridges) {
+        for (let t = 0; t <= 20; t++) {
+          const x = br.x0 + ((br.x1 - br.x0) * t) / 20, y = br.y0 + ((br.y1 - br.y0) * t) / 20;
+          if (lab[Math.floor(y * ky) * ww + Math.floor(x * k)] === 2) n++;
+        }
+      }
+      return n;
+    };
+    const off = method.build(img, s, {}), on = method.build(img, s, { supported: true });
+    const pieces = pieceCount({ ...on, kerf: s.kerf }, on.layers[0], PX);
+    check('without the option, a bridge crosses the blue half, over the hole in the red sheet beneath',
+      overBlue(off) > 0, `${overBlue(off)} bridge samples over blue, ${off.debug.bridges.length} bridges`);
+    check('keep bridges on the sheet below: none crosses the blue, and the top sheet is still one piece',
+      overBlue(on) === 0 && on.debug.bridges.length > 0 && pieces === 1 && on.debug.unsupported === 0 && on.debug.unresolved === 0,
+      `${overBlue(on)} samples over blue, ${on.debug.bridges.length} bridges, ${pieces} piece(s)`);
+    check('the option leaves the sheet beneath alone', on.layers[1].length === off.layers[1].length);
+    // a ring all blue but for a red notch 1.2 mm wide at the bottom: the red
+    // sheet's middle reaches the outside through the notch, so it has no
+    // bridges of its own to stack on, and the notch is too narrow for a 1.2 mm
+    // bridge to rest on. The island has no route over metal, and is cut free
+    // to glue down -- onto the red sheet, which is metal under it.
+    const notched = makeRGBA(300, 200, (x, y) => {
+      const r = Math.hypot(x - 150, y - 100);
+      if (r < 20 || r > 40) return [32, 32, 32];
+      return y > 100 && Math.abs(x - 150) < 3 ? [208, 32, 32] : [32, 64, 208];
+    });
+    const cut = method.build(notched, s, { supported: true, smooth: 0 });
+    const cp = pieceCount({ ...cut, kerf: s.kerf }, cut.layers[0], PX);
+    check('no route over metal: the island is cut free to glue down, and the note says so',
+      cut.debug.bridges.length === 0 && cut.debug.unsupported === 1 && cut.debug.unresolved === 0 && cp === 2 &&
+        cut.webs[0] === s.web && /1 parts could not be bridged over the sheet below — cut free to glue down/.test(cut.note),
+      `${cut.debug.unsupported} cut free, ${cp} pieces, web ${num(cut.webs[0], 3)} · ${cut.note}`);
+  }
+
   // ---- halftone inside shapes
   {
     // a light disc (radius 15 mm) with a ramp inside it -- every value above the

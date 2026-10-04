@@ -119,6 +119,17 @@ patterns cut as dark lines (coarse ones average thin lines into their tone). Lin
 scale is in millimeters on the metal. *Follow edges* smooths the lines along the
 image's direction, so they come out as long strokes rather than dashes.
 
+## Relief view
+
+The **Relief** view shows the stacked sheets lit from one side, so each one
+casts a shadow on the sheets beneath it. That makes the stacking order
+readable at a glance, and shows how the assembled piece will look. Its sliders
+set the **sheet thickness**, the **light height** (lower casts longer shadows)
+and the **light angle** (centered on light from the top of the image: positive
+from the right, negative from the left). They only
+re-shade the last result, so they respond at once. Brightness layers keep
+their outlines here.
+
 ## Running it
 
 Browsers block ES module imports from `file://`, so the app has to be served. No

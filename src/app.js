@@ -9,6 +9,7 @@ import { sheetFileName, levelFileName } from './core/names.js';
 import { physicalStack } from './core/stack.js';
 import { FILTERS, filterById } from './core/style.js';
 import { holePathData } from './core/holes.js';
+import { reliefShade } from './core/render.js';
 import { MAX_CELLS } from './core/units.js';
 import { generateSample } from './app/samples.js';
 
@@ -306,6 +307,7 @@ function drawRuler(ctx, lengthCss, pxPerMmCss, majorStep, vertical) {
 
 const HINTS = {
   result: 'front-lit: the sheet over what is behind it',
+  relief: 'shadows show which sheet lies on which',
   backlit: 'light through the holes',
   cut: 'what the beam follows, kerf-offset',
   source: 'the image, over the grid area',
@@ -335,11 +337,15 @@ function paint() {
   } else {
     const src = state.view === 'source' ? pv.source
       : state.view === 'backlit' && pv.backlit ? pv.backlit
+      : state.view === 'relief' ? reliefShade(pv.result, pv.height, pv.solid, pv.w, pv.h, pv.pxPerMm, reliefLight())
       : pv.result;
     out.data.set(src);
   }
   ctx.putImageData(out, 0, 0);
 }
+
+/** The Relief view's light and sheet thickness, from its sliders. */
+const reliefLight = () => ({ thickness: num('reliefThick'), elevation: num('reliefElev'), azimuth: num('reliefAz') });
 
 /** Red = rendered darker than target, blue = lighter, white = on target. */
 function divergingColor(e) {
@@ -768,6 +774,7 @@ function setView(v) {
     b.setAttribute('aria-pressed', String(b.dataset.view === v));
   }
   $('cutLayer').hidden = v !== 'cut';
+  $('reliefControls').hidden = v !== 'relief';
   paint();
 }
 
@@ -850,6 +857,12 @@ function wireViewControls() {
     b.addEventListener('click', () => setView(b.dataset.view));
   }
   $('cutLayer').addEventListener('change', paint);
+  // the Relief sliders only re-shade the last result: no re-run
+  for (const [id, fmt] of [['reliefThick', (v) => `${v.toFixed(1)} mm`], ['reliefElev', (v) => `${v}°`], ['reliefAz', (v) => `${v}°`]]) {
+    const show = () => { $(`${id}Val`).textContent = fmt(num(id)); };
+    show();
+    $(id).addEventListener('input', () => { show(); paint(); });
+  }
   $('rulers').addEventListener('change', () => {
     state.rulers = $('rulers').checked;
     paint();

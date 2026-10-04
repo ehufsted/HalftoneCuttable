@@ -28,7 +28,7 @@ self.onmessage = (ev) => {
     self.postMessage({ type: 'progress', jobId: msg.jobId, stage: 'cutting' });
     const out = runPipeline(msg.rgba, msg.settings, msg.methodId, msg.params);
     const p = out.preview;
-    const transfer = [p.result.buffer, p.source.buffer, p.diff.buffer,
+    const transfer = [p.result.buffer, p.source.buffer, p.diff.buffer, p.height.buffer, p.solid.data.buffer,
       ...(p.backlit ? [p.backlit.buffer] : [])];
     self.postMessage({ type: 'done', jobId: msg.jobId, ...out }, transfer);
   } catch (err) {

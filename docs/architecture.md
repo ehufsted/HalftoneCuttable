@@ -519,6 +519,28 @@ gradient differ too little to cross a threshold, so they merge, and chaining XDo
 only outlines the higher-contrast boundaries. A full facet lattice needs the edges
 drawn explicitly: an option on this filter, or a cutting method.
 
+## Relief view
+
+- **The worker computes heights once, and the app shades.** The pipeline turns
+  the same stack raster the Result view comes from into a height per pixel, in
+  sheets (`render.stackHeights`). The app shades the Result image from it on
+  every slider move (`render.reliefShade`, about 20 ms for a 900 px preview), so
+  the sliders never re-run the pattern.
+- **Shadows come from which sheets are metal, not from a height map.** A height
+  map stands every visible sheet on a solid column down to the floor, so a bridge
+  over a hole cast a wall's shadow. The worker sends one metal mask per sheet
+  (`render.sheetSolids`), and a pixel is shaded where its ray toward the light
+  passes through a sheet's thickness over that sheet's metal. Per sheet, one
+  sweep away from the light gives each pixel's distance to the nearest metal
+  toward the light; each pixel reads it where its ray enters the slab. A k-sheet
+  step casts a shadow k·thickness/tan(elevation) long. A 5 px bridge 1 mm up,
+  over a hole, casts a 15 px band and leaves the floor under it lit.
+- **The shadow line starts at the wall, not the pixel center.** Measured from
+  the occluder's pixel center, every shadow came out one pixel short (9 against
+  10 px, at 10 px/mm). The wall stands on the pixel boundary, half a step
+  nearer. The harness now measures the length exactly, at 45° and at other
+  elevations, thicknesses and drops.
+
 ## Export
 
 `core/svg.js` and `core/dxf.js` write the same hole model: holes first,

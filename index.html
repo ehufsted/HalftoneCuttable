@@ -105,6 +105,11 @@
   .seg button { border: 0; border-radius: 0; padding: 4px 10px; }
   .seg button[aria-pressed=true] { background: var(--accent); color: #10131a; font-weight: 600; }
   .seg button[hidden] { display: none; }
+  .relief { display: flex; gap: 12px; align-items: center; }
+  .relief[hidden] { display: none; }
+  .relief label { color: var(--dim); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .relief input[type=range] { width: 80px; }
+  .relief span { min-width: 3.2em; color: var(--text); }
   label.check { color: var(--dim); display: flex; align-items: center; gap: 5px; cursor: pointer; margin: 6px 0; }
   label.check[hidden] { display: none; }
 
@@ -340,12 +345,18 @@
     <div class="viewbar">
       <div class="seg" id="viewSeg">
         <button data-view="result" aria-pressed="true">Result</button>
+        <button data-view="relief" aria-pressed="false">Relief</button>
         <button data-view="backlit" aria-pressed="false">Backlit</button>
         <button data-view="cut" aria-pressed="false">Cut paths</button>
         <button data-view="source" aria-pressed="false">Source</button>
         <button data-view="diff" aria-pressed="false">Difference</button>
       </div>
       <select id="cutLayer" hidden></select>
+      <div class="relief" id="reliefControls" hidden>
+        <label title="thickness of every sheet in the stack">Sheet <input type="range" id="reliefThick" min="0.1" max="5" step="0.1" value="1"> <span id="reliefThickVal"></span></label>
+        <label title="the light's height above the sheets: lower casts longer shadows">Light height <input type="range" id="reliefElev" min="5" max="85" step="1" value="45"> <span id="reliefElevVal"></span></label>
+        <label title="the direction the light comes from: 0° is straight down from the top of the image, positive clockwise (from the right), negative counter-clockwise (from the left)">Light angle <input type="range" id="reliefAz" min="-180" max="180" step="1" value="0"> <span id="reliefAzVal"></span></label>
+      </div>
       <label class="check"><input type="checkbox" id="rulers"> Rulers</label>
       <div class="spacer"></div>
       <span id="hint" class="note"></span>

@@ -13,7 +13,7 @@
 // numbers read like the other app's even though the arithmetic is linear.
 
 import { DEFAULTS, applyTone } from './core/units.js';
-import { rasterizeHoles, composite, outlineSteps } from './core/render.js';
+import { rasterizeHoles, composite, outlineSteps, stackHeights, sheetSolids } from './core/render.js';
 import { layerStats } from './core/structure.js';
 import { alignmentHoles, dropBorder, dropNearAlignment } from './core/holes.js';
 import { toEncoded, luminance, hexToLinear, fadedRGB } from './core/color.js';
@@ -127,6 +127,10 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
   out.preview = {
     w: pre.w, h: pre.h, pxPerMm: pre.pxPerMm,
     result,
+    // the visible surface's height in sheets, and which sheets are metal at each
+    // pixel, for the Relief view's shading (app.js)
+    height: stackHeights(pre),
+    solid: sheetSolids(piece, cut, pre),
     backlit: bw ? composite(pre, stack.map(() => [0.004, 0.004, 0.004]).concat([[1, 1, 1]])) : null,
     source: sourcePreview(styled, b.imageRect, pre, display[0]),
     diff: diffPreview(b.cellAt, pre, diffCell),

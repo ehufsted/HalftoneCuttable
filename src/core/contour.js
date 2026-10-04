@@ -48,6 +48,7 @@ export function traceLoops(field, w, h, level) {
         return cross(keys[e], cx[a], cy[a], v[a], cx[b], cy[b], v[b]);
       };
       const crossed = [0, 1, 2, 3].filter((e) => inn[e] !== inn[(e + 1) & 3]);
+      // the segments, as pairs of crossed edges
       let pairs;
       if (crossed.length === 2) {
         pairs = [[crossed[0], crossed[1]]];
@@ -59,16 +60,18 @@ export function traceLoops(field, w, h, level) {
         pairs = isolate.map((c) => [(c + 3) & 3, c]);   // corner c touches edges c-1 and c
       }
       for (const [e1, e2] of pairs) {
-        let A = edgePt(e1), B = edgePt(e2), ka = keys[e1], kb = keys[e2];
-        // orient so inside is on the left of A -> B (cross > 0), judged by the
-        // corner farthest from the segment's line
-        let best = 0, sgn = 0;
-        for (let c = 0; c < 4; c++) {
-          const s = (B[0] - A[0]) * (cy[c] - A[1]) - (B[1] - A[1]) * (cx[c] - A[0]);
-          if (Math.abs(s) > best) { best = Math.abs(s); sgn = (s > 0) === inn[c] ? 1 : -1; }
-        }
-        if (sgn < 0) { [A, B] = [B, A]; [ka, kb] = [kb, ka]; }
-        segStart.set(ka, [kb, A[0], A[1]]);
+        // Inside on the left of A -> B: a segment runs FROM the crossed edge
+        // whose first corner is inside TO the one whose first corner is
+        // outside. Decided by the corners, not the geometry: a sample exactly at
+        // the level puts a crossing on a corner, a segment can then lie along
+        // the line through the corners that would judge it, and judged so it
+        // ran either way -- two segments started at one edge, their loops
+        // broke, and closed with chords across the sheet. This way an edge
+        // shared by two cells always ends a segment in one and starts one in
+        // the other.
+        const [from, to] = inn[e1] ? [e1, e2] : [e2, e1];
+        const A = edgePt(from);
+        segStart.set(keys[from], [keys[to], A[0], A[1]]);
       }
     }
   }

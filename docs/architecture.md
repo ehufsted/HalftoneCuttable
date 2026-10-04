@@ -536,6 +536,21 @@ would be about 20% off).
 
 ## Traps
 
+- **Marching squares orients segments by their corners, never by geometry.**
+  The trace contours a signed distance at -kerf/2 in pixels, which is exactly
+  -0.5 whenever kerf/2 is half a pixel, and the distance takes that value next
+  to every edge. A sample exactly at the level puts a crossing on a corner, and
+  a segment can then lie along the line through the corners that judged its
+  direction, so it ran either way. Two segments started at one edge, their
+  loops broke, and closed with straight chords across the sheet. That was in
+  the exported cut paths, not just the preview: on the rhino every sheet's
+  traced cut disagreed with its raster by 1-3%, and the top brightness layers
+  by 12-30%. Now a segment runs from the crossed edge whose first corner is
+  inside to the one whose first corner is outside, which saddles also obey.
+  `tests/core.contour.js` checks loops on noise, an all-saddle checkerboard and
+  an integer field cut at an integer level, and the rhino's sheets now agree
+  with their rasters to 0.1%.
+
 - **Every morphology step that ADDS metal must re-thicken it.** Filling a cut throat
   narrower than the smallest hole makes a metal wall as thin as the throat was
   short. Growing thin metal from discs leaves necks where two discs barely

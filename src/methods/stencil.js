@@ -37,7 +37,7 @@ import { resize } from '../shim/image.js';
 import { toEncoded, encodeFast, luminance } from '../core/color.js';
 import { blur } from '../core/features.js';
 import { edt, dilate, invert, components } from '../core/edt.js';
-import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
+import { sheetTools, scoreWindows, workRaster, sheetFrame } from '../core/cutsheet.js';
 
 export const id = 'stencil';
 export const label = 'Stencil';
@@ -76,12 +76,12 @@ export function build(rgba, settings, params = {}) {
 
   // ---- 1. posterize
   const src = new Float32Array(NP * D), lab = new Uint8Array(NP);
-  // The blank border, if any, is added to the structural rim here, at the raster
-  // stage, rather than dropped from the traced loops afterward -- a contour here
-  // can span most of the sheet, and dropping one whole loop because it grazes
-  // the border would take far more than the border with it.
+  // The blank border, if any, and a web round each alignment hole are added to
+  // the structural rim here, at the raster stage, rather than dropped from the
+  // traced loops afterward -- a contour here can span most of the sheet, and
+  // dropping one whole loop because it grazes either would take far more.
   const e = web + kerf / 2 + (s.border || 0);
-  const frame = borderFrame(ww, wh, k, ky, W, H, e);
+  const frame = sheetFrame(ww, wh, k, ky, W, H, s, e, web + kerf / 2);
   const encPal = palette.map((c) => c.map((v) => toEncoded(v)));
   for (let q = 0; q < NP; q++) {
     const r = planes[0].data[q], g = planes[1].data[q], b = planes[2].data[q];

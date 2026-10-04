@@ -2,6 +2,7 @@
 
 import { check, section, num, grayRamp, noiseRGBA, flatGray, plain } from './runner.js';
 import { runPipeline } from '../src/pipeline.js';
+import { pieceCount } from '../src/core/structure.js';
 
 export function run() {
   section('pipeline', 'The chain the worker runs, both modes, previews included.');
@@ -40,5 +41,41 @@ export function run() {
       at(5, 5) > 200 && at(30, 20) < 80, `corner ${at(5, 5)}, center ${at(30, 20)}`);
     check('alignment holes are not counted among the pattern layer’s own holes',
       solid.layers[0].length === 0 && solid.stats.layers[0].holes === 4);
+  }
+
+  // ---- alignment holes keep the web: to the outline, and to the pattern
+  // (dropped per hole, or kept metal on the stencil's raster)
+  {
+    const st = { ...plain, web: 0.6, minHole: 0.6, kerf: 0.15 };
+    const white = flatGray(300, 200, 255);
+    const gapTo = (out) => {
+      // finished edge to finished edge, the closest any pattern hole comes
+      let min = Infinity;
+      for (const al of out.align) {
+        const R = al.a / 2 + st.kerf / 2;
+        for (const h of out.layers[0]) min = Math.min(min, Math.hypot(h.cx - al.cx, h.cy - al.cy) - R - (h.a / 2 + st.kerf / 2));
+      }
+      return min;
+    };
+    for (const dist of [8, 1]) {
+      const out = runPipeline(white, { ...st, alignHoles: true, alignDist: dist, alignDia: 3 }, 'squareGrid',
+        { pitch: 3, shape: 'circle', rounding: 0, range: 'squeeze', diffuse: true }, { preview: false });
+      const al = out.align[0], toEdge = Math.min(al.cx, al.cy) - (al.a / 2 + st.kerf / 2);
+      const pieces = pieceCount(out.piece, out.layers[0].concat(out.align), 20);
+      check(`square grid, alignment ${dist} mm in: one piece, a web to the outline and to every pattern hole`,
+        pieces === 1 && toEdge >= st.web - 1e-9 && gapTo(out) >= st.web - 1e-6,
+        `${pieces} piece(s), ${num(toEdge, 3)} mm to the outline, ${num(gapTo(out), 3)} mm to the nearest pattern hole`);
+    }
+    // the stencil cuts the whole white field as one loop: the alignment holes
+    // must sit in metal kept a web wide round them
+    const sten = runPipeline(white, { ...st, alignHoles: true, alignDist: 8, alignDia: 3 }, 'stencil', {}, { preview: false });
+    let worst = Infinity;
+    for (const al of sten.align) {
+      const R = al.a / 2 + st.kerf / 2;
+      for (const L of sten.layers[0]) for (let i = 0; i < L.fx.length; i++) worst = Math.min(worst, Math.hypot(L.fx[i] - al.cx, L.fy[i] - al.cy) - R);
+    }
+    const sp = pieceCount(sten.piece, sten.layers[0].concat(sten.align), 20);
+    check('stencil: metal at least a web wide round each alignment hole, the sheet one piece',
+      worst >= st.web - 0.05 && sp === 1, `${num(worst, 3)} mm from an alignment hole to the cut, ${sp} piece(s)`);
   }
 }

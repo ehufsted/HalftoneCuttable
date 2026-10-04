@@ -26,7 +26,7 @@
 import { cutPath, sdf, areaOf, perimeterOf } from './shapes.js';
 import { cellCenter } from './units.js';
 import { rsqPathData } from './cutpaths.js';
-import { insideGrown, polyArea, polyPerimeter } from './polygon.js';
+import { insideGrown, polyArea, polyPerimeter, pointPolyDistance } from './polygon.js';
 
 /** The square grid's sizes as holes. */
 export function gridHoles(ctx, sizes, spec) {
@@ -45,19 +45,42 @@ export function gridHoles(ctx, sizes, spec) {
 /**
  * Four fixed corner holes for registering stacked sheets: the same positions on
  * every exported sheet (cut layers and the solid base alike), so a pin through
- * each one after cutting holds every sheet in register. `dist` is clamped so the
- * holes stay on the piece and never cross the center, whatever the piece size.
+ * each one after cutting holds every sheet in register. `dia` is the FINISHED
+ * diameter (the cut path is a kerf smaller, as every hole's). `dist`, from each
+ * edge to a center, is clamped so each hole keeps at least `web` of metal to the
+ * outline and never crosses the center; a piece too small for that gets none.
  */
-export function alignmentHoles(widthMm, heightMm, dist, dia) {
-  const r = dia / 2;
-  if (!(r > 0)) return [];
-  const d = Math.max(r, Math.min(dist, widthMm / 2 - r, heightMm / 2 - r));
-  if (!(d >= r)) return [];
+export function alignmentHoles(widthMm, heightMm, dist, dia, web = 0, kerf = 0) {
+  const r = dia / 2, a = dia - kerf;
+  if (!(r > 0) || !(a > 0)) return [];
+  const dMin = r + web, dMax = Math.min(widthMm, heightMm) / 2 - r;
+  if (!(dMax >= dMin)) return [];
+  const d = Math.max(dMin, Math.min(dist, dMax));
   const out = [];
   for (const cx of [d, widthMm - d]) {
-    for (const cy of [d, heightMm - d]) out.push({ kind: 'rsq', cx, cy, a: dia, r, rot: 0 });
+    for (const cy of [d, heightMm - d]) out.push({ kind: 'rsq', cx, cy, a, r: a / 2, rot: false });
   }
   return out;
+}
+
+/**
+ * A pattern's holes without any whose finished outline comes within `web` of an
+ * alignment hole's (both are cut paths grown by `d` = kerf/2). The pattern never
+ * knew where the alignment holes would go, so this is what keeps the web, and
+ * the one-piece guarantee, round them; removing holes only ever adds metal.
+ * Loops are left alone: one can span most of a sheet, so the stencil and the
+ * screen keep the alignment holes' surroundings metal on their own raster
+ * instead (cutsheet.keepOutHoles), as they do the border.
+ */
+export function dropNearAlignment(holes, align, web, d) {
+  if (!align.length) return holes;
+  return holes.filter((h) => h.kind === 'loop' ||
+    align.every((al) => finishedDistance(h, d, al.cx, al.cy) - (al.a / 2 + d) >= web - 1e-9));
+}
+
+/** Distance from (x, y) to the finished hole (cut path grown by d); negative inside. */
+function finishedDistance(h, d, x, y) {
+  return (h.kind === 'rsq' ? sdf(h, x - h.cx, y - h.cy) : pointPolyDistance(h, x, y)) - d;
 }
 
 /**

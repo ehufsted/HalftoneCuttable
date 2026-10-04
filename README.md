@@ -142,6 +142,7 @@ software.
 
 - **Cut order:** holes are blue (DXF layer `HOLES`) and the outline red (layer
   `OUTLINE`). Set the holes to cut before the outline, so the piece stays in the
+| Alignment holes | Four corner holes, the same on every sheet, for pins that hold the stack in register. The diameter is the finished hole's: size it to the pin. Each keeps at least the min web to the edge (moved in if need be) and to the pattern (pattern holes closer than that are left out). |
   sheet until its holes are done. Within the holes, innermost contours come first.
 - **DXF details:** DXF is AutoCAD R12, the version laser and CAM software imports
   most reliably. Circles are true `CIRCLE`s, and rounded corners are exact arcs. R12

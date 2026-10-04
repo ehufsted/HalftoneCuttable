@@ -15,7 +15,7 @@
 import { DEFAULTS, applyTone } from './core/units.js';
 import { rasterizeHoles, composite } from './core/render.js';
 import { layerStats } from './core/structure.js';
-import { alignmentHoles, dropBorder } from './core/holes.js';
+import { alignmentHoles, dropBorder, dropNearAlignment } from './core/holes.js';
 import { toEncoded, luminance, hexToLinear } from './core/color.js';
 import { byId } from './methods/index.js';
 import { applyStyle } from './core/style.js';
@@ -69,15 +69,18 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
   // the border straight into their own raster's structural rim (see their
   // build()), since one of their holes can be a loop spanning most of the sheet
   // and dropping it whole over a graze would take far more than the border.
-  const layers = s.border > 0
-    ? b.layers.map((holes) => dropBorder(holes, b.widthMm, b.heightMm, s.border, s.kerf / 2))
-    : b.layers;
   // Corner holes for registering the stack, the same on every sheet -- kept out
   // of `layers` (the pattern's own holes, what the stats below score) and added
   // in at export instead (app.js), the one place that also reaches the solid
   // base sheet, which has no entry of its own in `layers`. The border never
-  // drops these: they are the one thing explicitly allowed inside it.
-  const align = s.alignHoles ? alignmentHoles(b.widthMm, b.heightMm, s.alignDist, s.alignDia) : [];
+  // drops these: they are the one thing explicitly allowed inside it. Pattern
+  // holes within a web of one are dropped instead, by the same per-hole net
+  // (the stencil and the screen keep that metal on their raster, as the border).
+  const align = s.alignHoles ? alignmentHoles(b.widthMm, b.heightMm, s.alignDist, s.alignDia, s.web, s.kerf) : [];
+  const layers = b.layers.map((holes) => {
+    const kept = s.border > 0 ? dropBorder(holes, b.widthMm, b.heightMm, s.border, s.kerf / 2) : holes;
+    return dropNearAlignment(kept, align, s.web, s.kerf / 2);
+  });
   const out = {
     piece,
     layers,

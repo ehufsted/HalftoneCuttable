@@ -15,6 +15,7 @@
 import { edt, dilate, opening, invert, components } from './edt.js';
 import { traceLoops, simplifyLoop, offsetLoop } from './contour.js';
 import { polyArea } from './polygon.js';
+import { alignmentHoles } from './holes.js';
 import { rasterizeHoles } from './render.js';
 import { blur } from './features.js';
 
@@ -45,6 +46,34 @@ export function borderFrame(ww, wh, k, ky, W, H, e) {
     const x = (i + 0.5) / k, y = (j + 0.5) / ky;
     frame[q] = Math.min(x, y, W - x, H - y) < e ? 1 : 0;
   }
+  return frame;
+}
+
+/**
+ * Mark `frame` metal round each alignment hole (core/holes.js): within its
+ * finished radius (cut path + `d`) plus `margin`. In place.
+ */
+export function keepOutHoles(frame, ww, wh, k, ky, holes, d, margin) {
+  for (const h of holes) {
+    const R = h.a / 2 + d + margin;
+    const i0 = Math.max(0, Math.floor((h.cx - R) * k)), i1 = Math.min(ww - 1, Math.ceil((h.cx + R) * k));
+    const j0 = Math.max(0, Math.floor((h.cy - R) * ky)), j1 = Math.min(wh - 1, Math.ceil((h.cy + R) * ky));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (Math.hypot((i + 0.5) / k - h.cx, (j + 0.5) / ky - h.cy) < R) frame[j * ww + i] = 1;
+      }
+    }
+  }
+}
+
+/**
+ * The structural frame a raster method's sheets share: metal within `e` mm of
+ * the outline, and round any alignment holes the settings ask for, `margin`
+ * clear of their finished edge.
+ */
+export function sheetFrame(ww, wh, k, ky, W, H, s, e, margin) {
+  const frame = borderFrame(ww, wh, k, ky, W, H, e);
+  if (s.alignHoles) keepOutHoles(frame, ww, wh, k, ky, alignmentHoles(W, H, s.alignDist, s.alignDia, s.web, s.kerf), s.kerf / 2, margin);
   return frame;
 }
 

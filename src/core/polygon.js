@@ -163,6 +163,18 @@ export function insideGrown(P, d, x, y) {
   return false;
 }
 
+/** Distance from (x, y) to convex polygon P: 0 inside it, else to its nearest edge. */
+export function pointPolyDistance(P, x, y) {
+  if (insideGrown(P, 0, x, y)) return 0;
+  const { xs, ys } = P, n = xs.length;
+  let d2 = Infinity;
+  for (let k = 0; k < n; k++) {
+    const j = k + 1 === n ? 0 : k + 1;
+    d2 = Math.min(d2, segDist2(x, y, xs[k], ys[k], xs[j], ys[j]));
+  }
+  return Math.sqrt(d2);
+}
+
 /** Distance between two disjoint convex polygons: the closest vertex-edge pair. */
 export function polyDistance(A, B) {
   let d2 = Infinity;

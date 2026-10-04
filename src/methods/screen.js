@@ -43,7 +43,7 @@ import { orientationField, steerBlur, resampleField } from '../core/steer.js';
 import { solveMix, fitMix, cumulativeOpen, mixColor } from '../core/separate.js';
 import { blur, centralGradient } from '../core/features.js';
 import { erode, edt, invert } from '../core/edt.js';
-import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
+import { sheetTools, scoreWindows, workRaster, sheetFrame } from '../core/cutsheet.js';
 import { buildLicRows, buildBandpassRows, applyRows, localNormalize, quadraturePhase } from '../core/lic.js';
 
 export const id = 'screen';
@@ -230,7 +230,7 @@ export function build(rgba, settings, params = {}) {
   // blank border, if any, is folded into the rim here rather than dropped from
   // the traced loops afterward -- see stencil.js's build() for why.
   const e = web + kerf / 2 + (s.border || 0);
-  const frame = borderFrame(ww, wh, k, ky, W, H, e);
+  const frame = sheetFrame(ww, wh, k, ky, W, H, s, e, web + kerf / 2);
   const debug = { k, ww, wh, bridges: [], fallback: 0, unresolved: 0, specks: 0, floating: 0 };
   const { cleanSheet, bridgeSheet, finishSheet, measureWeb, traceSheet } = sheetTools({
     ww, wh, k, ky, frame, web, hFloor, kerf, bridgeWidth: P.bridgeWidth, bridgeStyle: 'auto',

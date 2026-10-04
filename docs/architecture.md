@@ -75,6 +75,15 @@ A pattern where holes span cells (slots, a connected web) needs its own reasonin
 its own entries in `tests/structure.js`.
 
 ## One hole family
+**The alignment holes are added after the pattern, so the pipeline keeps the
+argument for them.** A pattern never knows where they go. `alignmentHoles` keeps a
+web to the outline, and `dropNearAlignment` drops any pattern hole within a web of
+one; removing holes only adds metal. A loop can span most of a sheet, so the
+stencil and the screen keep that metal on their raster instead
+(`cutsheet.sheetFrame`), the same way they fold in the border. Before this, the
+defaults put pattern holes inside the web, and a 1 mm distance cut through the
+outline into 5 pieces (`tests/pipeline.js` checks both now).
+
 
 Every hole is a rounded square: side `a`, radius `r`, optionally turned 45°. A circle is
 `r = a/2`, and a diamond is a turned square. This gives one closed-form area, one

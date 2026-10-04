@@ -14,6 +14,7 @@ import { finished, extentOf } from './shapes.js';
 import { outline } from './cutpaths.js';
 import { rasterizeHoles } from './render.js';
 import { gridHoles, holePerimeter, holeFinishedArea } from './holes.js';
+import { components } from './edt.js';
 
 /**
  * The square grid's thinnest metal in one cut layer, in mm: along each axis
@@ -71,27 +72,9 @@ export function layerStats(piece, holes, thinnest, machine) {
  */
 export function pieceCount(piece, holes, pxPerMm) {
   const r = rasterizeHoles(piece, [holes], { pxPerMm, superSample: 1 });
-  const { w, h } = r;
-  const solid = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) solid[i] = r.counts[2 * i] ? 1 : 0;
-  const seen = new Uint8Array(w * h);
-  const stack = new Int32Array(w * h);
-  let pieces = 0;
-  for (let start = 0; start < w * h; start++) {
-    if (!solid[start] || seen[start]) continue;
-    pieces++;
-    let top = 0;
-    stack[top++] = start; seen[start] = 1;
-    while (top > 0) {
-      const k = stack[--top];
-      const x = k % w, y = (k - x) / w;
-      if (x > 0 && solid[k - 1] && !seen[k - 1]) { seen[k - 1] = 1; stack[top++] = k - 1; }
-      if (x < w - 1 && solid[k + 1] && !seen[k + 1]) { seen[k + 1] = 1; stack[top++] = k + 1; }
-      if (y > 0 && solid[k - w] && !seen[k - w]) { seen[k - w] = 1; stack[top++] = k - w; }
-      if (y < h - 1 && solid[k + w] && !seen[k + w]) { seen[k + w] = 1; stack[top++] = k + w; }
-    }
-  }
-  return pieces;
+  const solid = new Uint8Array(r.w * r.h);
+  for (let i = 0; i < solid.length; i++) solid[i] = r.counts[2 * i] ? 1 : 0;
+  return components(solid, r.w, r.h).sizes.length;
 }
 
 /** The square grid's sheet, by its sizes. */

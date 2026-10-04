@@ -24,7 +24,9 @@ const fmt = (v, dp = 3) => {
   // importers drop silently and some reject the whole file over.
   if (!isFinite(v)) return '0';
   const s = v.toFixed(dp);
-  return s.includes('.') ? s.replace(/\.?0+$/, '') || '0' : s;
+  // trim trailing zeros only after a decimal point (dp = 0 has none: "100")
+  const t = s.includes('.') ? s.replace(/\.?0+$/, '') || '0' : s;
+  return t === '-0' ? '0' : t;
 };
 
 /**

@@ -8,6 +8,8 @@
 // signed areas -- which is what lets area and even-odd filling work without
 // knowing which loop encloses which.
 
+import { polyArea } from './polygon.js';
+
 const BIG = 1e9;
 
 /**
@@ -89,16 +91,6 @@ export function traceLoops(field, w, h, level) {
   return loops;
 }
 
-/** Signed shoelace area. */
-export function loopArea(xs, ys) {
-  let a = 0;
-  for (let i = 0, n = xs.length; i < n; i++) {
-    const j = i + 1 === n ? 0 : i + 1;
-    a += xs[i] * ys[j] - xs[j] * ys[i];
-  }
-  return a / 2;
-}
-
 /**
  * Douglas–Peucker on a closed loop: split at the vertex farthest from vertex 0,
  * simplify both halves to within `tol`. Marching squares on a thresholded raster
@@ -146,7 +138,7 @@ export function simplifyLoop(xs, ys, tol) {
  */
 export function offsetLoop(xs, ys, d) {
   const n = xs.length;
-  const s = Math.sign(loopArea(xs, ys)) || 1;
+  const s = Math.sign(polyArea({ xs, ys })) || 1;
   const ox = new Float64Array(n), oy = new Float64Array(n);
   const normal = (a, b) => {            // outward unit normal of edge a -> b
     const ex = xs[b] - xs[a], ey = ys[b] - ys[a], L = Math.hypot(ex, ey) || 1;

@@ -63,17 +63,16 @@
 //   3. ADAPTIVE: a pixel's own curve is bilinearly interpolated between the four
 //      nearest tiles' curves (by its position relative to their centers), so the
 //      mapping changes smoothly and tile edges do not show as seams.
-// Applied to luminance only, and rescaled back into the pixel keeping its hue
-// (as Posterize's output does, and for the same reason): equalizing each of R,
-// G, B independently would shift colors, not just contrast.
+// Applied to luminance only, and rescaled back into the pixel keeping its hue:
+// equalizing each of R, G, B independently would shift colors, not just
+// contrast.
 //
 // BLUR (Gaussian). A plain isotropic blur, in millimeters on the piece, each of
-// R, G, B independently -- unlike CLAHE and Posterize there is no hue-preserving
-// recombination step, because blurring already treats every channel alike and
-// needs none. Replaces the old global "Smoothing" setting (once applied inside
-// every method's own linearPlanes step, whatever the pattern) with an ordinary
-// chain filter: optional, reorderable, and its own control rather than one that
-// every method paid for whether it used it or not.
+// R, G, B independently: blurring treats every channel alike, so unlike CLAHE it
+// needs no hue-preserving recombination.
+//
+// Painterly (Kuwahara) and Low-poly live in their own modules, core/kuwahara.js
+// and core/lowpoly.js, whose headers explain them.
 
 import { makeImage } from '../shim/image.js';
 import { blur } from './features.js';
@@ -81,17 +80,8 @@ import { orientationField, steerBlur } from './steer.js';
 import { kuwahara } from './kuwahara.js';
 import { lowPoly } from './lowpoly.js';
 import { edt, dilate, erode, opening } from './edt.js';
-import { rgbToOKLab, oklabToRgb, toLinear, toEncoded } from './color.js';
+import { rgbToOKLab, oklabToRgb, toLinear, toEncoded, luminance } from './color.js';
 import { kmeansPoints } from './separate.js';
-
-export const STYLE_DEFAULTS = {
-  filter: 'none',          // 'none' | 'xdog'
-  output: 'lines',         // 'lines' (the drawing alone) | 'over' (lines darkening the image)
-  scale: 0.6,              // mm: σ of the line detector
-  strength: 20,            // p
-  threshold: 0.3,          // ε, "Fill level"
-  flow: true,              // smooth along the edges
-};
 
 const K = 1.6, PHI = 40;
 
@@ -106,7 +96,7 @@ const xdogFilter = {
     { key: 'threshold', label: 'Fill level', type: 'range', min: 0, max: 1, step: 0.01, def: 0.3 },
     { key: 'flow', label: 'Follow edges', type: 'checkbox', def: true },
   ],
-  apply: (rgba, p, widthMm) => xdogStyle(rgba, p, widthMm),
+  apply: xdogStyle,
 };
 
 const kuwaharaFilter = {
@@ -118,11 +108,7 @@ const kuwaharaFilter = {
     { key: 'anisotropy', label: 'Anisotropy', type: 'range', min: 0, max: 3, step: 0.1, def: 1, dp: 1 },
     { key: 'sharpness', label: 'Sharpness', type: 'range', min: 2, max: 16, step: 1, def: 8 },
   ],
-  apply: (rgba, p, widthMm) => kuwahara(rgba, p, widthMm),
-};
-
-export const BLUR_DEFAULTS = {
-  radius: 2,     // mm
+  apply: kuwahara,
 };
 
 const blurFilter = {
@@ -132,12 +118,7 @@ const blurFilter = {
   params: [
     { key: 'radius', label: 'Blur radius', type: 'range', min: 0, max: 10, step: 0.1, def: 2, unit: 'mm', dp: 1 },
   ],
-  apply: (rgba, p, widthMm) => blurStyle(rgba, p, widthMm),
-};
-
-export const CLAHE_DEFAULTS = {
-  tileSize: 20,     // mm
-  clipLimit: 2,     // x the tile's average bin height
+  apply: blurStyle,
 };
 
 const claheFilter = {
@@ -148,13 +129,7 @@ const claheFilter = {
     { key: 'tileSize', label: 'Tile size', type: 'range', min: 5, max: 60, step: 1, def: 20, unit: 'mm' },
     { key: 'clipLimit', label: 'Contrast limit', type: 'range', min: 1, max: 8, step: 0.5, def: 2, dp: 1 },
   ],
-  apply: (rgba, p, widthMm) => claheStyle(rgba, p, widthMm),
-};
-
-export const POSTERIZE_DEFAULTS = {
-  levels: 5,     // K palette colors
-  cleanup: 1,    // mm: shapes narrower than this are opened away, notches this small are closed up
-  seed: 1,
+  apply: claheStyle,
 };
 
 const posterizeFilter = {
@@ -166,7 +141,7 @@ const posterizeFilter = {
     { key: 'cleanup', label: 'Shape cleanup', type: 'range', min: 0, max: 5, step: 0.1, def: 1, unit: 'mm', dp: 1 },
     { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1 },
   ],
-  apply: (rgba, p, widthMm) => posterizeStyle(rgba, p, widthMm),
+  apply: posterizeStyle,
 };
 
 const lowPolyFilter = {
@@ -183,7 +158,7 @@ const lowPolyFilter = {
     { key: 'color', label: 'Facet color', type: 'select', def: 'average', options: [['average', 'Average'], ['median', 'Median']] },
     { key: 'seed', label: 'Seed', type: 'range', min: 1, max: 99, step: 1, def: 1, when: (p) => p.layout === 'adaptive' },
   ],
-  apply: (rgba, p, widthMm) => lowPoly(rgba, p, widthMm),
+  apply: lowPoly,
 };
 
 /** The filters, in their default chain order. */
@@ -210,8 +185,7 @@ export function applyStyle(rgba, style, widthMm) {
   return out;
 }
 
-function blurStyle(rgba, style, widthMm) {
-  const st = { ...BLUR_DEFAULTS, ...style };
+function blurStyle(rgba, st, widthMm) {
   const { width: w, height: h, data } = rgba;
   const n = w * h;
   const sigma = st.radius * (w / widthMm);
@@ -231,15 +205,14 @@ function blurStyle(rgba, style, widthMm) {
 
 const CLAHE_BINS = 256;
 
-function claheStyle(rgba, style, widthMm) {
-  const st = { ...CLAHE_DEFAULTS, ...style };
+function claheStyle(rgba, st, widthMm) {
   const { width: w, height: h, data } = rgba;
   const n = w * h;
 
   // luminance, as an integer 0..255 -- histogram bins need discrete values
   const Y = new Uint8Array(n);
   for (let i = 0, q = 0; i < n; i++, q += 4) {
-    Y[i] = Math.round(0.2126 * data[q] + 0.7152 * data[q + 1] + 0.0722 * data[q + 2]);
+    Y[i] = Math.round(luminance(data[q], data[q + 1], data[q + 2]));
   }
 
   // ---- one equalization curve per tile, contrast-limited
@@ -297,7 +270,7 @@ function claheStyle(rgba, style, widthMm) {
 /** Morphological closing: fill notches and holes narrower than 2r, keep the rest. */
 const closing = (A, w, h, r) => erode(dilate(A, w, h, r), w, h, r);
 
-/** OKLab distance squared, K-many centers against one point. */
+/** Index of the center nearest point p, by squared OKLab distance. */
 const nearest = (p, centers) => {
   let best = 0, bd = Infinity;
   for (let k = 0; k < centers.length; k++) {
@@ -308,8 +281,7 @@ const nearest = (p, centers) => {
   return best;
 };
 
-function posterizeStyle(rgba, style, widthMm) {
-  const st = { ...POSTERIZE_DEFAULTS, ...style };
+function posterizeStyle(rgba, st, widthMm) {
   const { width: w, height: h, data } = rgba;
   const n = w * h;
   const nCol = Math.max(2, Math.round(st.levels));
@@ -355,13 +327,12 @@ function posterizeStyle(rgba, style, widthMm) {
   return { width: w, height: h, data: out };
 }
 
-function xdogStyle(rgba, style, widthMm) {
-  const st = { ...STYLE_DEFAULTS, ...style };
+function xdogStyle(rgba, st, widthMm) {
   const { width: w, height: h, data } = rgba;
   const n = w * h;
   const lum = makeImage(w, h);
   for (let i = 0, q = 0; i < n; i++, q += 4) {
-    lum.data[i] = (0.2126 * data[q] + 0.7152 * data[q + 1] + 0.0722 * data[q + 2]) / 255;
+    lum.data[i] = luminance(data[q], data[q + 1], data[q + 2]) / 255;
   }
   const T = xdog(lum, st.scale * (w / widthMm), st);
   const out = new Uint8ClampedArray(n * 4);

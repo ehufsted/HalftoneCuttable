@@ -1,18 +1,23 @@
-// The shared engine of the cell webs (Voronoi web, Facets): a web of convex cells,
-// each cut as a hole inset from its walls, its margin solved per cell for tone.
+// The shared engine of the cell webs (Voronoi web, Facets, Rectangles): a web of
+// convex cells, each cut as a hole inset from its walls, its margin solved per
+// cell for tone.
 //
 // Everything but WHERE the cells are: reading the image, the detail and edge
 // features, color regions, the per-cell tone law, targets, error diffusion over
 // the cell graph, the stacked-color modes, the web figures. The reasoning for all
-// of it is in voronoiWeb.js's header; this code was that file's before it was shared.
+// of it is in voronoiWeb.js's header.
 //
 // A LAYOUT places the cells. It is called with
 //   {rect, spacingAt, sMin, sMax, feats, P, W, H, ww, wh, kx, ky, enc, web}
 // (enc: the image's encoded channels on the work raster, for a layout that cuts by
 // the image itself) and returns
 //   {N, cells, sites, cellOfPixel(i, j), cellAt(x, y), isLine(i, q, k), notes, unit, debug}
-// and optionally wallExtra(i, q, k): the extra metal, per side, on cell i's edge k
-// (q = -1 on the rectangle), in place of the one Metal-lines width -- a layout
+// cells[i] is a convex polygon (core/polygon.js) whose edge k is labeled with the
+// neighboring cell (-1 on the rectangle); sites a representative point per cell
+// (for the diffusion order and the empty-cell fallback); isLine says whether the
+// wall between i and q (i's edge k) lies along an image edge, for Metal lines.
+// Optionally also wallExtra(i, q, k): the extra metal, per side, on cell i's edge
+// k (q = -1 on the rectangle), in place of the one Metal-lines width -- a layout
 // whose walls differ in weight (Rectangles' tapering cuts) says so here.
 //
 // `opts` (optional): {minPxPerMm} -- a floor on the work raster's resolution, for a
@@ -23,10 +28,6 @@
 // to the shared tone band, so a large cell is not held back by the small ones:
 // solid regions become flat blocks of their sheet, and a mixed cell shows its
 // color at full saturation. Nothing is left over to diffuse.
-// cells[i] is a convex polygon (core/polygon.js) whose edge k is labeled with the
-// neighboring cell (-1 on the rectangle); sites a representative point per cell
-// (for the diffusion order and the empty-cell fallback); isLine says whether the
-// wall between i and q (i's edge k) lies along an image edge, for Metal lines.
 //
 // Any convex cells work: the one-piece argument only needs every hole inset at
 // least web/2 from each wall of a convex cell, and the cells clipped to the piece
@@ -122,7 +123,6 @@ export function buildCellWeb(rgba, settings, params, DEF, layout, opts = {}) {
     if (votes) votes[c * n + pixLabel[q]]++;
   };
   for (let j = 0; j < wh; j++) {
-    const y = (j + 0.5) / ky;
     for (let i = 0; i < ww; i++) addPixel(L.cellOfPixel(i, j), j * ww + i);
   }
   for (let c = 0; c < N; c++) {

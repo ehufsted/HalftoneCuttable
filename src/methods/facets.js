@@ -22,8 +22,9 @@
 // areas go without a hole sooner (they are metal: dark).
 
 import { mulberry32 } from '../shim/random.js';
-import { lloyd } from '../core/seeds.js';
+import { lloyd, Crowd, fillCandidates } from '../core/seeds.js';
 import { triangulate } from '../core/delaunay.js';
+import { triangleOwners } from '../core/lowpoly.js';
 import { buildCellWeb } from './cellWeb.js';
 import { params as voronoiParams } from './voronoiWeb.js';
 
@@ -40,24 +41,12 @@ export function facetLayout(c) {
   const { rect, spacingAt, sMin, sMax, feats, P, ww, wh, kx, ky } = c;
   const [x0, y0, x1, y1] = rect;
   const xs = [], ys = [], pinned = [], onEdge = [], nxs = [], nys = [];
-  const cs = Math.max(1e-3, 0.7 * sMin);
-  const gw = Math.ceil((x1 - x0) / cs) + 1, gh = Math.ceil((y1 - y0) / cs) + 1;
-  const buckets = Array.from({ length: gw * gh }, () => []);
-  const bx = (x) => Math.min(gw - 1, Math.max(0, Math.floor((x - x0) / cs)));
-  const by = (y) => Math.min(gh - 1, Math.max(0, Math.floor((y - y0) / cs)));
+  const crowd = new Crowd(rect, Math.max(1e-3, 0.7 * sMin));
   const put = (x, y, pin, edge = 0, nx = 0, ny = 0) => {
-    buckets[by(y) * gw + bx(x)].push(xs.length);
+    crowd.add(x, y);
     xs.push(x); ys.push(y); pinned.push(pin); onEdge.push(edge); nxs.push(nx); nys.push(ny);
   };
-  const clear = (x, y, r) => {
-    const k = Math.ceil(r / cs), cx = bx(x), cy = by(y);
-    for (let j = Math.max(0, cy - k); j <= Math.min(gh - 1, cy + k); j++) {
-      for (let i = Math.max(0, cx - k); i <= Math.min(gw - 1, cx + k); i++) {
-        for (const q of buckets[j * gw + i]) if ((xs[q] - x) ** 2 + (ys[q] - y) ** 2 < r * r) return false;
-      }
-    }
-    return true;
-  };
+  const clear = (x, y, r) => crowd.clear(x, y, r);
 
   // corners, and a ring along each side at the local spacing
   for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) put(x, y, 1);
@@ -86,13 +75,7 @@ export function facetLayout(c) {
   }
 
   // the fill, in seeded random order
-  const rand = mulberry32(P.seed | 0);
-  const step = 0.4 * sMin, cand = [];
-  for (let y = y0 + step / 2; y < y1; y += step) {
-    for (let x = x0 + step / 2; x < x1; x += step) cand.push([x + (rand() - 0.5) * step, y + (rand() - 0.5) * step]);
-  }
-  for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
-  for (const [x, y] of cand) {
+  for (const [x, y] of fillCandidates(rect, 0.4 * sMin, mulberry32(P.seed | 0))) {
     if (x <= x0 || y <= y0 || x >= x1 || y >= y1) continue;
     if (clear(x, y, 0.85 * spacingAt(x, y))) put(x, y, 0);
   }
@@ -112,22 +95,7 @@ export function facetLayout(c) {
 
   // which facet owns each work pixel (pixels in the border band take the facet at
   // the nearest point of the rectangle, whose ring of corners it touches)
-  const owner = new Int32Array(ww * wh).fill(-1);
-  for (let t = 0; t < n; t++) {
-    const C = cells[t];
-    const ax = C.xs[0] * kx, ay = C.ys[0] * ky, bxp = C.xs[1] * kx, byp = C.ys[1] * ky, cx = C.xs[2] * kx, cy = C.ys[2] * ky;
-    const i0 = Math.max(0, Math.floor(Math.min(ax, bxp, cx) - 0.5)), i1 = Math.min(ww - 1, Math.ceil(Math.max(ax, bxp, cx)));
-    const j0 = Math.max(0, Math.floor(Math.min(ay, byp, cy) - 0.5)), j1 = Math.min(wh - 1, Math.ceil(Math.max(ay, byp, cy)));
-    for (let j = j0; j <= j1; j++) {
-      const py = j + 0.5;
-      for (let i = i0; i <= i1; i++) {
-        const pxx = i + 0.5;
-        if ((bxp - ax) * (py - ay) - (byp - ay) * (pxx - ax) >= -1e-9 &&
-          (cx - bxp) * (py - byp) - (cy - byp) * (pxx - bxp) >= -1e-9 &&
-          (ax - cx) * (py - cy) - (ay - cy) * (pxx - cx) >= -1e-9) owner[j * ww + i] = t;
-      }
-    }
-  }
+  const owner = triangleOwners(X, Y, tris, n, ww, wh, kx, ky);
   const ownerAt = (xm, ym) => {
     const x = Math.min(x1, Math.max(x0, xm)), y = Math.min(y1, Math.max(y0, ym));
     const i = Math.min(ww - 1, Math.max(0, Math.floor(x * kx))), j = Math.min(wh - 1, Math.max(0, Math.floor(y * ky)));

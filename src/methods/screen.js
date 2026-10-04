@@ -41,7 +41,7 @@ import { mulberry32 } from '../shim/random.js';
 import { luminance, toEncoded } from '../core/color.js';
 import { orientationField, steerBlur, resampleField } from '../core/steer.js';
 import { solveMix, fitMix, cumulativeOpen, mixColor } from '../core/separate.js';
-import { blur } from '../core/features.js';
+import { blur, centralGradient } from '../core/features.js';
 import { erode, edt, invert } from '../core/edt.js';
 import { sheetTools, scoreWindows, workRaster, borderFrame } from '../core/cutsheet.js';
 import { buildLicRows, buildBandpassRows, applyRows, localNormalize, quadraturePhase } from '../core/lic.js';
@@ -102,14 +102,12 @@ export function build(rgba, settings, params = {}) {
   // cleanup takes some back. Measured with the signed-distance screen, one
   // correction at full gain: band 1.0 gave -1.4/-1.1/-3.0% at 0.3/0.5/0.7 of the
   // stripe band, 0.9 gave -1.2/-0.9/-1.9%, 0.8 gave -0.4/-1.6/-1.5%. 0.9 keeps
-  // every level within 2%. (With the old field-ranked screen the lace was ragged,
-  // 0.875 of the band was unreachable, and this had to be 0.8.)
+  // every level within 2%.
   const TURING_BAND = 0.9;
-  // The Turing feedback applies GAIN of the measured shortfall. With the old
-  // field-ranked screen the full amount overshot the lows (raising the target
-  // merged ragged spots) and 0.75 was needed; the signed-distance screen grows
-  // every shape evenly, and at band 0.9 the full amount measured -1.2/-0.9/-1.9%
-  // against 0.9's -2.4/-1.2/-2.0%.
+  // The Turing feedback applies GAIN of the measured shortfall. The signed-
+  // distance screen grows every shape evenly, so the full amount does not
+  // overshoot: at band 0.9 it measured -1.2/-0.9/-1.9% against 0.9's
+  // -2.4/-1.2/-2.0%.
   const GAIN = 1.0;
   // A wave compresses the stripes where it slopes: their spacing across drops to
   // p / sqrt(1 + (2πA/λ)²) (0.77 of the period at the defaults), and the band must
@@ -138,22 +136,13 @@ export function build(rgba, settings, params = {}) {
   const cpx = Math.min(px, P.screen === 'flowLic' ? 1.5 : 3);
   const cw = Math.max(4, Math.round(W * cpx)), ch = Math.max(4, Math.round(H * cpx));
   const coarse = planes.map((pl) => resize(pl, cw, ch));
-  // Both flow-line screens' own wavelength, per coarse pixel: P.period in the darks,
-  // narrowing toward the lights. Narrower in the DARKS would fight the area
-  // law instead of reading with it -- open = light here (as every screen),
-  // so a dark target already asks for close to no open area, and dividing an
-  // already-tiny opening into even more, even-tinier slices only pushes each
-  // one further below the structural floor for nothing: the achieved tone
-  // does not change (the law conserves it regardless of how the period is
-  // sliced), and `cleanSheet` quietly erases most of what was drawn there.
-  // The lights have the opposite problem -- plenty of room, one wide slot per
-  // period reads as a single bold highlight -- so that is where narrowing
-  // usefully adds texture instead of erasing it.
-  //
-  // Computed here, before the duty fit below, so duty can be capped by THIS
-  // pixel's own fMax rather than the nominal one -- the metal-stays-at-least-
-  // web argument (fMax = 1 - web/L) only holds for the wavelength actually
-  // painted there.
+  // The flow-line screen's own wavelength, per coarse pixel: P.period in the
+  // darks, narrowing toward the lights, where there is room for the texture (in
+  // the darks the slots are already near the structural floor, and slicing them
+  // finer only gets them erased; docs/architecture.md, "Line contrast").
+  // Computed before the duty fit below, so duty is capped by THIS pixel's own
+  // fMax: the metal-stays-at-least-web argument (fMax = 1 - web/L) holds only
+  // for the wavelength actually painted there.
   const flowLmm = P.screen === 'flowLic' ? new Float64Array(cw * ch) : null;
   if (flowLmm) {
     for (let q = 0; q < cw * ch; q++) {
@@ -352,7 +341,7 @@ export function build(rgba, settings, params = {}) {
     // worms grow long that way (core/steer.js). It grows at 8 px per period rather
     // than 12 -- the steered blur samples along lines and costs several times the
     // separable one, and the signed-distance screen below smooths the result.
-    // At anisotropy 0 none of this runs: the round labyrinth is exactly as before.
+    // At anisotropy 0 none of this runs: the round labyrinth costs nothing extra.
     const aniso = P.anisotropy > 0;
     const tr = (aniso ? 8 : 12) / p;
     const tw = Math.max(8, Math.round(W * tr)), tht = Math.max(8, Math.round(H * tr));
@@ -441,18 +430,8 @@ export function build(rgba, settings, params = {}) {
       clum.data[q] = toEncoded(luminance(coarse[0].data[q], coarse[1].data[q], coarse[2].data[q]));
     }
     // direction judged over 1.5 periods, as the Turing screen's anisotropy is
-    const sm = blur(clum, 1.5 * cpx * p);
-    const g0 = new Float64Array(cw * ch);
-    for (let y = 0; y < ch; y++) {
-      const yu = Math.max(0, y - 1), yd = Math.min(ch - 1, y + 1);
-      for (let x = 0; x < cw; x++) {
-        const xl = Math.max(0, x - 1), xr = Math.min(cw - 1, x + 1);
-        const gx = (sm.data[y * cw + xr] - sm.data[y * cw + xl]) / 2;
-        const gy = (sm.data[yd * cw + x] - sm.data[yu * cw + x]) / 2;
-        g0[y * cw + x] = Math.atan2(gy, gx);
-      }
-    }
-    return g0;
+    const { ux, uy } = centralGradient(blur(clum, 1.5 * cpx * p).data, cw, ch);
+    return Float64Array.from(ux, (gx, q) => Math.atan2(uy[q], gx));
   }
 
   /**

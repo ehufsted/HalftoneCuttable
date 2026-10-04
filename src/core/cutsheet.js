@@ -13,7 +13,8 @@
 // methods/stencil.js's header; it is the same pipeline.
 
 import { edt, dilate, opening, invert, components } from './edt.js';
-import { traceLoops, simplifyLoop, loopArea, offsetLoop } from './contour.js';
+import { traceLoops, simplifyLoop, offsetLoop } from './contour.js';
+import { polyArea } from './polygon.js';
 import { rasterizeHoles } from './render.js';
 import { blur } from './features.js';
 
@@ -280,7 +281,7 @@ export function sheetTools(ctx) {
       const t = simplifyLoop(L.xs, L.ys, 0.3);
       return { xs: Float64Array.from(t.xs, (v) => v / k), ys: Float64Array.from(t.ys, (v) => v / ky) };
     }).filter((L) => L.xs.length >= 3);
-    const total = loops.reduce((a, L) => a + loopArea(L.xs, L.ys), 0);
+    const total = loops.reduce((a, L) => a + polyArea(L), 0);
     const sign = total >= 0 ? 1 : -1;
     // nesting depth: how many other loops contain this one; deepest cut first
     const box = loops.map((L) => [Math.min(...L.xs), Math.min(...L.ys), Math.max(...L.xs), Math.max(...L.ys)]);
@@ -299,7 +300,7 @@ export function sheetTools(ctx) {
     // the loop so the renderer and the area do not have to regrow it on a raster,
     // where half a kerf is often under half a pixel and simply vanishes.
     loops = loops.map((L, i) => {
-      const outer = sign * loopArea(L.xs, L.ys) > 0;
+      const outer = sign * polyArea(L) > 0;
       const f = offsetLoop(L.xs, L.ys, outer ? kerf / 2 : -kerf / 2);
       return { kind: 'loop', xs: L.xs, ys: L.ys, fx: f.xs, fy: f.ys, sign, depth: depth[i] };
     });
@@ -320,6 +321,20 @@ function pointInLoop(x, y, L) {
 
 
 /**
+ * Scoring windows about `size` mm on a side, tiling the piece: their count, size
+ * and the window at a point (-1 off the piece).
+ */
+export function windowGrid(W, H, size) {
+  const cols = Math.max(1, Math.round(W / size)), rows = Math.max(1, Math.round(H / size));
+  const wx = W / cols, wy = H / rows;
+  const cellAt = (x, y) => {
+    const i = Math.floor(x / wx), j = Math.floor(y / wy);
+    return i < 0 || j < 0 || i >= cols || j >= rows ? -1 : j * cols + i;
+  };
+  return { cols, rows, wx, wy, N: cols * rows, cellAt };
+}
+
+/**
  * Score a hole model in windows: the per-pixel target and source averaged per
  * window, and what the sheets actually show there, from the renderer at the work
  * resolution.
@@ -328,13 +343,7 @@ function pointInLoop(x, y, L) {
 export function scoreWindows(o) {
   const { W, H, ww, wh, k, ky, D, palette, kerf, src, layers, tgtPix } = o;
   const NP = ww * wh;
-  const WINDOW = o.window;
-  const cols = Math.max(1, Math.round(W / WINDOW)), rows = Math.max(1, Math.round(H / WINDOW));
-  const wx = W / cols, wy = H / rows, NW = cols * rows;
-  const cellAt = (x, y) => {
-    const i = Math.floor(x / wx), j = Math.floor(y / wy);
-    return i < 0 || j < 0 || i >= cols || j >= rows ? -1 : j * cols + i;
-  };
+  const { N: NW, cellAt } = windowGrid(W, H, o.window);
   const target = new Float64Array(NW * D), source = new Float64Array(NW * D), achieved = new Float64Array(NW * D);
   const cnt = new Float64Array(NW);
   {

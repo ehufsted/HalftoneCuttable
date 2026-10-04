@@ -26,6 +26,7 @@
 
 import { makeImage, resize } from '../shim/image.js';
 import { orientationField } from './steer.js';
+import { luminance } from './color.js';
 
 const SECTORS = 8;
 const R_PX = 4;
@@ -52,7 +53,7 @@ export function kuwahara(rgba, p, widthMm) {
   }
   const pl = src.map((im) => resize(im, w, h).data);
   const lum = makeImage(w, h);
-  for (let i = 0; i < w * h; i++) lum.data[i] = 0.2126 * pl[0][i] + 0.7152 * pl[1][i] + 0.0722 * pl[2][i];
+  for (let i = 0; i < w * h; i++) lum.data[i] = luminance(pl[0][i], pl[1][i], pl[2][i]);
   const field = orientationField(lum, r, 'edges');        // major axis along the edges
 
   const q = p.sharpness;

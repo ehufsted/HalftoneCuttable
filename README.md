@@ -164,7 +164,7 @@ src/
   pipeline.js   settings + pixels -> holes, previews, scores
   shim/         image resize/blur (copied from HalftoneWebPAL-1), seeded RNG
   core/         units, shapes, color, separation, diffusion, render, cut paths, SVG, structure
-  methods/      one module per pattern (squareGrid)
+  methods/      one module per pattern, plus the engines they share (cellWeb, gridTone)
 tests/          one module per area; runner.js has no DOM, report.js paints
 docs/architecture.md   the invariants, read before changing core/
 ```

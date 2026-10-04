@@ -8,11 +8,10 @@
 // by just under web/2 and flood-filled. One piece means every connection is at
 // least the web wide, which is a stronger claim than merely "one piece".
 
-import { check, section, num, makeRGBA, plain } from './runner.js';
+import { check, section, num, makeRGBA, plain, metalOf, thickPieces } from './runner.js';
 import method from '../src/methods/stencil.js';
 import { pieceCount } from '../src/core/structure.js';
-import { rasterizeHoles } from '../src/core/render.js';
-import { edt, opening, components } from '../src/core/edt.js';
+import { opening } from '../src/core/edt.js';
 import { layerSVG } from '../src/core/svg.js';
 import { polyArea, polyPerimeter } from '../src/core/polygon.js';
 
@@ -33,23 +32,6 @@ function rings() {
     if (y >= 15 && y < 45 && x === 150) return [255, 255, 255];                                      // 0.2 mm white slot
     return [0, 0, 0];
   });
-}
-
-/** Metal mask of one sheet, from its contours, at PX px/mm. */
-function metalOf(b, holes, kerf) {
-  const r = rasterizeHoles({ widthMm: b.widthMm, heightMm: b.heightMm, kerf }, [holes], { pxPerMm: PX, superSample: 1 });
-  const M = new Uint8Array(r.w * r.h);
-  for (let i = 0; i < M.length; i++) M[i] = r.counts[2 * i] ? 1 : 0;
-  return { M, w: r.w, h: r.h };
-}
-
-function thickPieces(M, w, h, web) {
-  const C = M.map((v) => 1 - v);
-  const d = edt(C, w, h);
-  const core = new Uint8Array(M.length);
-  const r = (web / 2) * PX - 1.5;
-  for (let i = 0; i < M.length; i++) core[i] = M[i] && d[i] > r ? 1 : 0;
-  return components(core, w, h).sizes.length;
 }
 
 export function run() {

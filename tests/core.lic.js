@@ -2,7 +2,8 @@
 // (LIC) screen.
 
 import { check, section, num } from './runner.js';
-import { buildLicRows, buildBandpassRows, applyRows, centralGradient, quadraturePhase } from '../src/core/lic.js';
+import { buildLicRows, buildBandpassRows, applyRows, quadraturePhase } from '../src/core/lic.js';
+import { centralGradient } from '../src/core/features.js';
 
 export function run() {
   section('core.lic', 'LIC rows are row-normalized; the band-pass passes its own wavelength at unit gain and rejects a flat field; the gradient and quadrature recover a known sinusoid’s phase.');

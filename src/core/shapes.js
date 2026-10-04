@@ -81,13 +81,20 @@ export function floorSize(spec, hMin) {
  * (r = k/2 below one size, proportional above it) and a closed form per piece is
  * more code than it is worth. It is monotone in s, which is all bisection needs.
  */
-export function sizeFor(spec, f, p, sMax) {
-  if (!(f > 0)) return 0;
-  if (f >= openFraction(spec, sMax, p)) return sMax;
-  let lo = 0, hi = sMax;
+export const sizeFor = (spec, f, p, sMax) => bisectSize((s) => openFraction(spec, s, p), f, sMax);
+
+/**
+ * The size s in [0, cap] at which a monotone open-fraction law `fOf` reaches
+ * f, by bisection: 0 for f <= 0, cap when even cap falls short. Shared by every
+ * hole family (the hex grid's hexagons too).
+ */
+export function bisectSize(fOf, f, cap) {
+  if (!(f > 0) || !(cap > 0)) return 0;
+  if (f >= fOf(cap)) return cap;
+  let lo = 0, hi = cap;
   for (let i = 0; i < 40; i++) {
     const mid = 0.5 * (lo + hi);
-    if (openFraction(spec, mid, p) < f) lo = mid; else hi = mid;
+    if (fOf(mid) < f) lo = mid; else hi = mid;
   }
   return 0.5 * (lo + hi);
 }

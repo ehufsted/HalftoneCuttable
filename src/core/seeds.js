@@ -83,19 +83,8 @@ export function placeSeeds(o) {
   }
 
   // 2. fill
-  const rand = mulberry32(o.seed | 0);
-  const step = 0.4 * sMin;
-  const cand = [];
-  for (let y = rect[1] + step / 2; y < rect[3]; y += step) {
-    for (let x = rect[0] + step / 2; x < rect[2]; x += step) {
-      cand.push([Math.min(rect[2], x + (rand() - 0.5) * step), Math.min(rect[3], y + (rand() - 0.5) * step)]);
-    }
-  }
-  for (let i = cand.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [cand[i], cand[j]] = [cand[j], cand[i]];
-  }
-  for (const [x, y] of cand) {
+  for (const [cx, cy] of fillCandidates(rect, 0.4 * sMin, mulberry32(o.seed | 0))) {
+    const x = Math.min(rect[2], cx), y = Math.min(rect[3], cy);
     if (crowd.clear(x, y, 0.85 * spacingAt(x, y))) {
       crowd.add(x, y); pinned.push(0); side.push(0); nxs.push(0); nys.push(0);
     }
@@ -110,6 +99,25 @@ export function placeSeeds(o) {
     pinned: Uint8Array.from(pinned), side: Int8Array.from(side),
     nx: Float64Array.from(nxs), ny: Float64Array.from(nys),
   };
+}
+
+/**
+ * The candidates of a variable-radius Poisson-disc fill: a grid `step` apart
+ * over rect, each jittered by up to step/2 (so possibly just outside rect; the
+ * caller clamps or skips), in seeded random order. The caller accepts each one
+ * that keeps its local spacing from everything placed so far (Crowd.clear).
+ * Shared by the Voronoi seeds, the facet corners and the low-poly style.
+ */
+export function fillCandidates(rect, step, rand) {
+  const cand = [];
+  for (let y = rect[1] + step / 2; y < rect[3]; y += step) {
+    for (let x = rect[0] + step / 2; x < rect[2]; x += step) cand.push([x + (rand() - 0.5) * step, y + (rand() - 0.5) * step]);
+  }
+  for (let i = cand.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [cand[i], cand[j]] = [cand[j], cand[i]];
+  }
+  return cand;
 }
 
 /**

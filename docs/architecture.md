@@ -14,7 +14,8 @@ core/      units, shapes, color, separate, diffuse, render, cutpaths, svg, struc
            steer (direction fields and blurs steered along them),
            style (the style-filter registry and chain), kuwahara, lowpoly,
            delaunay (ported verbatim from HalftoneWebPAL-1)
-methods/   one module per pattern; imports core/ only
+methods/   one module per pattern, plus two engines patterns share (cellWeb: the
+           cell webs; gridTone: the fixed grids' tone); imports core/ only
 pipeline.js  the whole chain; imports methods/ and core/
 worker.js  wraps pipeline.js
 app.js     UI; the only DOM user (plus svg.downloadSVG)
@@ -106,27 +107,15 @@ amount.
   hole, and the deeper layers squeezed by registration. It works in the target's own
   channels, in serpentine order (`core/diffuse.js`).
 - **Gamma, brightness and saturation run before Style, not inside each method.**
-  `core/units.js`'s `applyTone` applies all three to the raw pixels, in
-  `runPipeline`, before `applyStyle` -- so the Style chain, every method, AND the
-  Source view all see the result, rather than gamma/brightness/saturation being
-  invisible adjustments a method made privately after the preview had already
-  been built from the styled image. Gamma is a darkness curve on the encoded
-  value (as the pen-plotter app this was copied from does, so the slider means
-  the same thing there); brightness and saturation run after, in LINEAR light,
-  since that is where this app's own mixing model lives, then the result is
-  encoded back to ordinary pixels -- the same shape of function as a Style
-  filter (`{width, height, data}` in, the same out), and an identity, returning
-  the very same object, when all three are at their defaults. Brightness and
-  saturation can leave [0, 1] where gamma alone never did, so the result is
-  clamped before encoding back; `core/units.js`'s own `linearPlanes` no longer
-  adjusts anything, only decodes, so it cannot disagree with what the Source
-  view showed.
-- **Smoothing is a Style filter now, not a setting.** The old global Smoothing
-  slider ran inside every method's own `linearPlanes` step, paid for whether a
-  method's look needed it or not (Stencil's own separate "Shape smoothing" param,
-  for smoothing the raster before thresholding into shapes, was never this and is
-  untouched). It is now `core/style.js`'s Blur (Gaussian) filter: optional,
-  reorderable, and applied once in the chain instead.
+  `core/units.js`'s `applyTone` applies all three to the raw pixels in
+  `runPipeline`, before `applyStyle`, so the Style chain, every method and the
+  Source view all see the result; `linearPlanes` only decodes, so it cannot
+  disagree with what the Source view showed. `applyTone` has a Style filter's
+  shape (`{width, height, data}` in and out) and returns the very same object at
+  the defaults. Its header has the details.
+- **Smoothing is a Style filter, not a setting** (Blur, in `core/style.js`), so a
+  pattern that does not want it does not pay for it. The Stencil's "Shape
+  smoothing" is its own thing: it smooths the raster before thresholding.
 
 ## Voronoi web
 
@@ -443,38 +432,9 @@ the older `{filter: 'xdog', ...}` is read as a chain of one (the harness checks 
 two give identical output). The order matters: Kuwahara then XDoG draws lines on
 clean, flattened regions; XDoG then Kuwahara softens the lines into blobs.
 
-**Blur (Gaussian)** softens each of R, G, B independently (`core/features.js`'s
-`blur`, the same one XDoG and Kuwahara use for their own internal blurs), radius
-in millimeters. No hue-preserving recombination step, unlike CLAHE and Posterize:
-blurring already treats every channel alike and needs none. This is what the old
-global Smoothing setting became -- see Tone, above.
-
-**Local contrast (CLAHE)** (Pizer et al. 1987) equalizes a tile's own luminance
-histogram (its cumulative distribution, scaled to fill [0, 255]) rather than the
-whole image's, so a flat region gets its own local stretch instead of whatever the
-global histogram happens to do with it. CONTRAST LIMITED: any histogram bin taller
-than a multiple of the tile's average bin height is clipped first, the clipped
-mass spread back evenly over every bin -- unclipped, a tile that is a narrow, near-
-uniform band (grain, not signal) gets the SAME full-range stretch as real detail
-would, the classic AHE noise-amplification failure. ADAPTIVE: a pixel's own curve
-is bilinearly interpolated between its four nearest tiles' curves, so the mapping
-changes smoothly and tile edges do not show as seams. Applied to luminance only,
-recombined into the pixel keeping its hue -- the same technique, and the same
-reason, as Posterize's output.
-
-**Posterize** reduces the image to a real palette of N colors, not a tone-band
-trick. K-means clusters a sample of the pixels in OKLab (a perceptual space: equal
-steps look equally different to the eye, unlike linear light or encoded sRGB) --
-the same clustering `separate.js`'s palette suggester runs for the Sheets tab,
-minus its push away from the mean, since that push is for extra nested-hole gamut
-and Posterize wants the image's actual dominant colors. Every pixel then takes
-its nearest palette color, a hard partition into N regions. Because N arbitrary
-colors have no natural order (unlike tone bands, where band j+1 is always inside
-band j), the "shape simplification" cleans up each color's region on its own --
-an opening then a closing at the cleanup radius, removing small islands and filling
-small notches -- and resolves any pixel a cleanup leaves claimed by none or several
-colors to whichever cleaned region is nearest, by the same exact distance
-transform (`core/edt.js`) the stencil's own cleanup uses.
+How Blur, Local contrast (CLAHE), Posterize and Ink lines work is in
+`core/style.js`'s header, and Kuwahara's and Low-poly's in their own modules';
+what follows is what was measured, and the limits.
 
 **Anisotropic Kuwahara** (`core/kuwahara.js`): an ellipse along the structure-tensor
 direction, 8 soft sectors (cos⁴ weights × a radial Gaussian), each sector's mean

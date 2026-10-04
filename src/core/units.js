@@ -108,8 +108,8 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 /**
  * The source as three LINEAR planes, a plain sRGB decode. Every method starts
  * here, on whatever `applyTone` and the Style chain have already made of the
- * pixels -- this itself no longer adjusts anything, so it cannot disagree with
- * what the Source view showed.
+ * pixels; it adjusts nothing itself, so it cannot disagree with what the Source
+ * view showed.
  */
 export function linearPlanes(rgba) {
   const n = rgba.width * rgba.height;
@@ -124,10 +124,8 @@ export function linearPlanes(rgba) {
 
 /**
  * Gamma, brightness and saturation, applied to the RAW pixels before anything
- * else -- the Style chain and every method see the result, and so does the
- * Source view, which is why this runs first rather than inside each method's
- * own linearPlanes step (where it used to live, after Style, invisible to that
- * preview). Gamma is a darkness curve on the encoded value, as the pen-plotter
+ * else, so the Style chain, every method and the Source view all see the
+ * result. Gamma is a darkness curve on the encoded value, as the pen-plotter
  * app this was copied from does. Brightness is a plain multiplier in LINEAR
  * light (physically: scaling the light), and saturation moves each channel
  * toward or away from the pixel's own linear-light luminance -- both commute

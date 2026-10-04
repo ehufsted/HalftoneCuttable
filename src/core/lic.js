@@ -34,17 +34,7 @@
 // screen (methods/screen.js), since these rows cost the same order as its
 // own pixel count squared in practice, not the plain color-mix solve's linear.
 
-import { blur } from './features.js';
-
-const bilerp = (F, w, h, x, y) => {
-  x = x < 0 ? 0 : x > w - 1 ? w - 1 : x;
-  y = y < 0 ? 0 : y > h - 1 ? h - 1 : y;
-  const x0 = Math.floor(x), y0 = Math.floor(y);
-  const x1 = Math.min(w - 1, x0 + 1), y1 = Math.min(h - 1, y0 + 1);
-  const fx = x - x0, fy = y - y0;
-  return F[y0 * w + x0] * (1 - fx) * (1 - fy) + F[y0 * w + x1] * fx * (1 - fy) +
-    F[y1 * w + x0] * (1 - fx) * fy + F[y1 * w + x1] * fx * fy;
-};
+import { blur, centralGradient, bilerp } from './features.js';
 
 /**
  * A fractional (x, y) sample of weight `wgt`, split across its 4 bilinear
@@ -186,19 +176,6 @@ export function localNormalize(u, w, h, sigma) {
   const out = new Float64Array(u.length);
   for (let i = 0; i < u.length; i++) out[i] = u[i] / Math.max(Math.sqrt(2 * Math.max(0, A[i])), 1e-6);
   return out;
-}
-
-/** Central-difference gradient, clamped (Neumann) edges. */
-export function centralGradient(u, w, h) {
-  const at = (x, y) => u[(y < 0 ? 0 : y > h - 1 ? h - 1 : y) * w + (x < 0 ? 0 : x > w - 1 ? w - 1 : x)];
-  const ux = new Float64Array(w * h), uy = new Float64Array(w * h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      ux[y * w + x] = (at(x + 1, y) - at(x - 1, y)) / 2;
-      uy[y * w + x] = (at(x, y + 1) - at(x, y - 1)) / 2;
-    }
-  }
-  return { ux, uy };
 }
 
 /**

@@ -24,12 +24,12 @@
 // diffusion is what keeps the average right when greed costs something.
 
 import { diffuseCells } from '../core/diffuse.js';
-import { solveMix, cumulativeOpen, visibleMix, mixColor, fitMix } from '../core/separate.js';
+import { stackColors } from '../core/separate.js';
 import { maxSize, floorSize, openFraction, sizeFor } from '../core/shapes.js';
 import { prepare } from '../core/units.js';
-import { stackColors } from '../core/separate.js';
 import { gridHoles } from '../core/holes.js';
 import { thinnestWeb } from '../core/structure.js';
+import { fitTargets, realizeCells, topStats, kerfNote } from './gridTone.js';
 
 export const id = 'squareGrid';
 export const label = 'Square grid';
@@ -48,7 +48,7 @@ export const params = [
 
 /** The shape spec and the size limits every function here shares. */
 export function limits(ctx) {
-  const spec = { shape: ctx.shape || 'circle', rounding: ctx.rounding || 0, kerf: ctx.kerf };
+  const spec = { shape: ctx.shape || 'square', rounding: ctx.rounding || 0, kerf: ctx.kerf };
   const sMax = maxSize(ctx.pitch, ctx.web);
   const sFloor = floorSize(spec, ctx.minHole);
   return {
@@ -59,22 +59,8 @@ export function limits(ctx) {
 }
 
 /** What the method aims at, per cell, in the same D channels as ctx.target. */
-export function targetImage(ctx) {
-  const { fMax } = limits(ctx);
-  const { cols, rows, D, palette } = ctx;
-  const out = new Float32Array(cols * rows * D);
-  const x = new Float64Array(D);
-  const m = new Float64Array(palette.length);
-  const c = new Float64Array(D);
-  for (let i = 0; i < cols * rows; i++) {
-    for (let d = 0; d < D; d++) x[d] = ctx.target[i * D + d];
-    solveMix(x, palette, m);
-    fitMix(m, fMax, ctx.range);
-    mixColor(m, palette, c);
-    for (let d = 0; d < D; d++) out[i * D + d] = c[d];
-  }
-  return out;
-}
+export const targetImage = (ctx) =>
+  fitTargets(ctx.target, ctx.cols * ctx.rows, ctx.D, ctx.palette, limits(ctx).fMax, ctx.range);
 
 /**
  * @returns {{sizes: Float32Array[], note: string, target: Float32Array}}
@@ -84,40 +70,14 @@ export function targetImage(ctx) {
 export function run(ctx) {
   const { spec, sMax, sFloor, fFloor } = limits(ctx);
   const { cols, rows, D, palette, pitch: p, nCut } = ctx;
-  const reg = ctx.mode === 'color' ? ctx.reg : 0;
-  const sizes = Array.from({ length: nCut }, () => new Float32Array(cols * rows));
-
   const target = targetImage(ctx);
-  if (sFloor > sMax) {
-    return { sizes, note: 'no hole fits: the min hole (or 1.5× kerf) exceeds pitch − web', target };
-  }
-
-  const m = new Float64Array(palette.length);
-  const F = new Float64Array(nCut);
-  const got = new Float64Array(nCut);
-  const vis = new Float64Array(palette.length);
-
-  diffuseCells(cols, rows, D, target, (cell, want, out) => {
-    solveMix(want, palette, m);
-    cumulativeOpen(m, F);
-    let prev = sMax + 2 * reg;           // so layer 0's cap is exactly sMax
-    for (let j = 0; j < nCut; j++) {
-      const cap = prev > 0 ? Math.min(sMax, prev - 2 * reg) : 0;
-      let s = 0;
-      if (cap >= sFloor) {
-        s = sizeFor(spec, F[j], p, cap);
-        if (s < sFloor) s = F[j] >= fFloor / 2 ? sFloor : 0;
-      }
-      sizes[j][cell] = s;
-      got[j] = openFraction(spec, s, p);
-      prev = s;
-    }
-    visibleMix(got, vis);
-    mixColor(vis, palette, out);
-  }, ctx.diffuse !== false);
-
-  let note = '';
-  if (sFloor > ctx.minHole + 1e-9) note = `min hole raised to ${sFloor.toFixed(2)} mm by the kerf`;
+  const sizes = realizeCells({
+    N: cols * rows, palette, nCut, reg: ctx.mode === 'color' ? ctx.reg : 0, sMax, sFloor, fFloor,
+    fOf: (s) => openFraction(spec, s, p),
+    sizeOf: (f, cap) => sizeFor(spec, f, p, cap),
+    diffuse: (visit) => diffuseCells(cols, rows, D, target, visit, ctx.diffuse !== false),
+  });
+  const note = sFloor > sMax ? 'no hole fits: the min hole (or 1.5× kerf) exceeds pitch − web' : kerfNote(sFloor, ctx.minHole);
   return { sizes, note, target };
 }
 
@@ -130,18 +90,7 @@ export function build(rgba, settings, params) {
   const target = res.target;
   const achieved = stackColors(ctx, res.sizes, spec);
   const N = ctx.cols * ctx.rows, D = ctx.D;
-
-  // Cells that wanted a hole in the top sheet and could not have one, and cells
-  // pinned at the largest hole the web allows.
-  let dropped = 0, saturated = 0;
-  const m = new Float64Array(ctx.palette.length);
-  const x = new Float64Array(D);
-  for (let c = 0; c < N; c++) {
-    for (let d = 0; d < D; d++) x[d] = target[c * D + d];
-    solveMix(x, ctx.palette, m);
-    if (1 - m[0] > 1e-3 && !(res.sizes[0][c] > 0)) dropped++;
-    if (res.sizes[0][c] >= sMax - 1e-6) saturated++;
-  }
+  const { dropped, saturated } = topStats(target, res.sizes[0], N, D, ctx.palette, sMax);
 
   return {
     widthMm: ctx.widthMm, heightMm: ctx.heightMm, mode: ctx.mode, D, N, palette: ctx.palette,

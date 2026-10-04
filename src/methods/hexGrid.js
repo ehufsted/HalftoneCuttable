@@ -19,28 +19,22 @@
 // HOLE AREA LAW. A hexagon hole is a convex polygon (core/holes.js's 'poly' kind):
 // the cut path is a sharp hexagon, and the beam rounds its corners on cutting, so
 // the finished area is Steiner's exact law (ideal area + perimeter*kerf/2 +
-// pi*(kerf/2)^2) -- the same law core/holes.js already uses for the Voronoi web's
-// cells, and it is exact for any convex polygon. A circle hole reuses
-// core/shapes.js's own closed-form circle (the rounded-square family's r = a/2
-// case), the same code squareGrid uses. Both are solved by bisection against a
-// target open fraction, the same technique core/shapes.js's own sizeFor uses for
-// its family: the kerf floor makes the law piecewise, and a closed form per
-// piece is more code than it is worth.
+// pi*(kerf/2)^2), exact for any convex polygon. A circle hole is core/shapes.js's
+// closed-form circle, as squareGrid's. Both are inverted by bisection
+// (shapes.bisectSize).
 //
-// TONE. Per cell, in the same greedy layer-by-layer, error-diffused way as
-// squareGrid (see its header): solve the target mix, cap each layer by the one
-// above it less the registration allowance, and hand what a cell could not match
-// to its neighbors. Diffusion runs over the hex GRAPH (core/diffuse.js's
-// diffuseGraph), not the raster diffuseCells, because a hex cell has six
-// neighbors, not four.
+// TONE. The same greedy, error-diffused realization as squareGrid
+// (methods/gridTone.js), with diffusion over the hex GRAPH (diffuseGraph): a hex
+// cell has six neighbors, not four.
 
 import { diffuseGraph } from '../core/diffuse.js';
-import { solveMix, cumulativeOpen, visibleMix, mixColor, fitMix } from '../core/separate.js';
-import { finished, cutPath, areaOf } from '../core/shapes.js';
-import { prepareRaster, linearPlanes } from '../core/units.js';
+import { stackColorsBy } from '../core/separate.js';
+import { finished, cutPath, areaOf, bisectSize } from '../core/shapes.js';
+import { prepareRaster, linearPlanes, MAX_CELLS } from '../core/units.js';
 import { luminance } from '../core/color.js';
 import { resize } from '../shim/image.js';
 import { polyHole } from '../core/holes.js';
+import { fitTargets, realizeCells, topStats, kerfNote } from './gridTone.js';
 
 export const id = 'hexGrid';
 export const label = 'Hex grid';
@@ -55,7 +49,6 @@ export const params = [
 ];
 
 const WORK_PIXELS = 2e6;
-const MAX_CELLS = 250000;      // matches core/units.js's own cols*rows cap
 const SQRT3 = Math.sqrt(3);
 
 // ---------------------------------------------------------------- hex geometry
@@ -79,23 +72,6 @@ function openFraction(shape, s, cellArea, kd) {
   if (shape === 'circle') return areaOf(finished({ shape: 'circle', rounding: 0, kerf: 2 * kd }, s)) / cellArea;
   const R = hexCutRadius(s, kd);
   return (hexArea(R) + hexPerimeter(R) * kd + Math.PI * kd * kd) / cellArea;
-}
-
-/**
- * Bisected inverse of openFraction: the size s in [0, cap] whose open fraction
- * is f. Closed forms exist past the kerf floor for both shapes, but the floor
- * itself makes the law piecewise -- core/shapes.js's own sizeFor bisects for
- * exactly this reason, rather than special-case the floor.
- */
-function sizeFor(shape, f, cellArea, kd, cap) {
-  if (!(f > 0) || !(cap > 0)) return 0;
-  if (f >= openFraction(shape, cap, cellArea, kd)) return cap;
-  let lo = 0, hi = cap;
-  for (let i = 0; i < 40; i++) {
-    const mid = 0.5 * (lo + hi);
-    if (openFraction(shape, mid, cellArea, kd) < f) lo = mid; else hi = mid;
-  }
-  return 0.5 * (lo + hi);
 }
 
 /** Smallest nominal size worth cutting: the user's floor, raised if the kerf
@@ -181,18 +157,6 @@ function hexThinnestWeb(sizes, cols, rows, pitch, cellXY, W, H) {
   return min;
 }
 
-/** Each cell's achieved color, from the final sizes of every cut layer. */
-function stackHex(shape, sizesArr, palette, cellArea, kd, N, D) {
-  const out = new Float64Array(N * D);
-  const f = new Float64Array(sizesArr.length), vis = new Float64Array(sizesArr.length + 1), col = new Float64Array(D);
-  for (let c = 0; c < N; c++) {
-    for (let j = 0; j < sizesArr.length; j++) f[j] = openFraction(shape, sizesArr[j][c], cellArea, kd);
-    mixColor(visibleMix(f, vis), palette, col);
-    for (let d = 0; d < D; d++) out[c * D + d] = col[d];
-  }
-  return out;
-}
-
 // -------------------------------------------------------------------- method
 
 /** The shape and size limits every function here shares. */
@@ -206,20 +170,7 @@ export function limits(ctx) {
 }
 
 /** What the method aims at, per cell, in the same D channels as ctx.target. */
-export function targetImage(ctx) {
-  const { fMax } = limits(ctx);
-  const { N, D, palette } = ctx;
-  const out = new Float32Array(N * D);
-  const x = new Float64Array(D), m = new Float64Array(palette.length), c = new Float64Array(D);
-  for (let i = 0; i < N; i++) {
-    for (let d = 0; d < D; d++) x[d] = ctx.target[i * D + d];
-    solveMix(x, palette, m);
-    fitMix(m, fMax, ctx.range);
-    mixColor(m, palette, c);
-    for (let d = 0; d < D; d++) out[i * D + d] = c[d];
-  }
-  return out;
-}
+export const targetImage = (ctx) => fitTargets(ctx.target, ctx.N, ctx.D, ctx.palette, limits(ctx).fMax, ctx.range);
 
 /**
  * @returns {{sizes: Float32Array[], note: string, target: Float32Array}}
@@ -227,39 +178,15 @@ export function targetImage(ctx) {
 export function run(ctx) {
   const { shape, sMax, sFloor, fFloor, cellArea } = limits(ctx);
   const { N, D, palette, nCut, order, nbrs } = ctx;
-  const reg = ctx.mode === 'color' ? ctx.reg : 0;
   const kd = ctx.kerf / 2;
-  const sizes = Array.from({ length: nCut }, () => new Float32Array(N));
-
   const target = targetImage(ctx);
-  if (sFloor > sMax) {
-    return { sizes, note: 'no hole fits: the min hole (or 1.5× kerf) exceeds the cell', target };
-  }
-
-  const m = new Float64Array(palette.length);
-  const F = new Float64Array(nCut), got = new Float64Array(nCut), vis = new Float64Array(palette.length);
-
-  diffuseGraph(order, nbrs, D, target, (cell, want, out) => {
-    solveMix(want, palette, m);
-    cumulativeOpen(m, F);
-    let prev = sMax + 2 * reg;           // so layer 0's cap is exactly sMax
-    for (let j = 0; j < nCut; j++) {
-      const cap = prev > 0 ? Math.min(sMax, prev - 2 * reg) : 0;
-      let s = 0;
-      if (cap >= sFloor) {
-        s = sizeFor(shape, F[j], cellArea, kd, cap);
-        if (s < sFloor) s = F[j] >= fFloor / 2 ? sFloor : 0;
-      }
-      sizes[j][cell] = s;
-      got[j] = openFraction(shape, s, cellArea, kd);
-      prev = s;
-    }
-    visibleMix(got, vis);
-    mixColor(vis, palette, out);
-  }, ctx.diffuse !== false);
-
-  let note = '';
-  if (sFloor > ctx.minHole + 1e-9) note = `min hole raised to ${sFloor.toFixed(2)} mm by the kerf`;
+  const fOf = (s) => openFraction(shape, s, cellArea, kd);
+  const sizes = realizeCells({
+    N, palette, nCut, reg: ctx.mode === 'color' ? ctx.reg : 0, sMax, sFloor, fFloor, fOf,
+    sizeOf: (f, cap) => bisectSize(fOf, f, cap),
+    diffuse: (visit) => diffuseGraph(order, nbrs, D, target, visit, ctx.diffuse !== false),
+  });
+  const note = sFloor > sMax ? 'no hole fits: the min hole (or 1.5× kerf) exceeds the cell' : kerfNote(sFloor, ctx.minHole);
   return { sizes, note, target };
 }
 
@@ -344,20 +271,8 @@ export function build(rgba, settings, params = {}) {
   const { shape: sh, sMax, cellArea } = limits(ctx);
   const kd = kerf / 2;
   const target = res.target;
-  const achieved = stackHex(sh, res.sizes, palette, cellArea, kd, N, D);
-
-  // Cells that wanted a hole in the top sheet and could not have one, and cells
-  // pinned at the largest hole the web allows.
-  let dropped = 0, saturated = 0;
-  {
-    const mm = new Float64Array(palette.length), xx = new Float64Array(D);
-    for (let c = 0; c < N; c++) {
-      for (let d = 0; d < D; d++) xx[d] = target[c * D + d];
-      solveMix(xx, palette, mm);
-      if (1 - mm[0] > 1e-3 && !(res.sizes[0][c] > 0)) dropped++;
-      if (res.sizes[0][c] >= sMax - 1e-6) saturated++;
-    }
-  }
+  const achieved = stackColorsBy(res.sizes, palette, N, D, (sz) => openFraction(sh, sz, cellArea, kd));
+  const { dropped, saturated } = topStats(target, res.sizes[0], N, D, palette, sMax);
 
   const layers = [];
   for (let j = 0; j < ctx.nCut; j++) {

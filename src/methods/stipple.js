@@ -45,6 +45,7 @@ import { solveMix, fitMix, mixColor } from '../core/separate.js';
 import { SeedHash } from '../core/voronoi.js';
 import { lloyd } from '../core/seeds.js';
 import { hilbertIndex, pow2At } from '../core/hilbert.js';
+import { windowGrid } from '../core/cutsheet.js';
 
 export const id = 'stipple';
 export const label = 'Stipple';
@@ -162,12 +163,7 @@ export function build(rgba, settings, params = {}) {
 
   // ---- scoring windows: a few dots across, since one dot says nothing about tone
   const win = 4 * sMin;
-  const cols = Math.max(1, Math.round(W / win)), rows = Math.max(1, Math.round(H / win));
-  const wx = W / cols, wy = H / rows, NW = cols * rows;
-  const cellAt = (x, y) => {
-    const i = Math.floor(x / wx), j = Math.floor(y / wy);
-    return i < 0 || j < 0 || i >= cols || j >= rows ? -1 : j * cols + i;
-  };
+  const { wx, wy, N: NW, cellAt } = windowGrid(W, H, win);
   const target = new Float64Array(NW * D), source = new Float64Array(NW * D), cnt = new Float64Array(NW);
   {
     const m = new Float64Array(n), col = new Float64Array(D);

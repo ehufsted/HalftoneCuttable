@@ -20,7 +20,7 @@
 //   needs.
 
 import { makeImage, resize } from '../shim/image.js';
-import { blur } from './features.js';
+import { blur, centralGradient, bilerp } from './features.js';
 
 /**
  * @param {{w,h,data}} im   encoded luminance
@@ -30,21 +30,18 @@ import { blur } from './features.js';
  */
 export function orientationField(im, sigmaT, along = 'edges') {
   const { w, h } = im;
-  const g = blur(im, 1).data;
+  const { ux: gx, uy: gy } = centralGradient(blur(im, 1).data, w, h);
   const j11 = makeImage(w, h), j12 = makeImage(w, h), j22 = makeImage(w, h);
-  for (let y = 0; y < h; y++) {
-    const yu = y > 0 ? y - 1 : 0, yd = y < h - 1 ? y + 1 : h - 1;
-    for (let x = 0; x < w; x++) {
-      const xl = x > 0 ? x - 1 : 0, xr = x < w - 1 ? x + 1 : w - 1;
-      const gx = (g[y * w + xr] - g[y * w + xl]) / 2, gy = (g[yd * w + x] - g[yu * w + x]) / 2;
-      const i = y * w + x;
-      j11.data[i] = gx * gx; j12.data[i] = gx * gy; j22.data[i] = gy * gy;
-    }
+  for (let i = 0; i < w * h; i++) {
+    j11.data[i] = gx[i] * gx[i]; j12.data[i] = gx[i] * gy[i]; j22.data[i] = gy[i] * gy[i];
   }
   const a = blur(j11, sigmaT).data, b = blur(j12, sigmaT).data, c = blur(j22, sigmaT).data;
   const n = w * h;
   const energy = new Float32Array(n);
   for (let i = 0; i < n; i++) energy[i] = a[i] + c[i];
+  // exact, by sorting, not features.quantile: the energy is heavy-tailed, and
+  // that histogram's bins span [0, max], so at the 90th percentile one bin can
+  // be as wide as the value itself
   const sorted = Float32Array.from(energy).sort();
   const ref = sorted[Math.floor(0.9 * (n - 1))] || 1e-12;
   const ux = new Float32Array(n), uy = new Float32Array(n), strength = new Float32Array(n);
@@ -79,16 +76,7 @@ function lineBlur(src, w, h, dx, dy, kernels, pick) {
       const k = kernels[pick(i)], r = (k.length - 1) / 2;
       const ex = dx[i], ey = dy[i];
       let acc = 0;
-      for (let t = -r; t <= r; t++) {
-        let sx = x + t * ex, sy = y + t * ey;
-        sx = sx < 0 ? 0 : sx > w - 1 ? w - 1 : sx;
-        sy = sy < 0 ? 0 : sy > h - 1 ? h - 1 : sy;
-        const x0 = sx | 0, y0 = sy | 0, x1 = x0 < w - 1 ? x0 + 1 : x0, y1 = y0 < h - 1 ? y0 + 1 : y0;
-        const fx = sx - x0, fy = sy - y0;
-        const v = (src[y0 * w + x0] * (1 - fx) + src[y0 * w + x1] * fx) * (1 - fy) +
-          (src[y1 * w + x0] * (1 - fx) + src[y1 * w + x1] * fx) * fy;
-        acc += k[t + r] * v;
-      }
+      for (let t = -r; t <= r; t++) acc += k[t + r] * bilerp(src, w, h, x + t * ex, y + t * ey);
       out[i] = acc;
     }
   }

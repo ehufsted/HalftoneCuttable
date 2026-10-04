@@ -12,36 +12,63 @@ export function blur(im, sigma) {
   return blurGaussian(im, 2 * Math.ceil(2.5 * sigma) + 1, sigma);
 }
 
-/** Summed gradient over channels, plus the direction of the strongest channel. */
-function gradient(chans) {
-  const { w, h } = chans[0];
-  const mag = new Float32Array(w * h), gx = new Float32Array(w * h), gy = new Float32Array(w * h);
+/** Bilinear sample of a w×h field at (x, y) in pixel-index coordinates, clamped to it. */
+export function bilerp(F, w, h, x, y) {
+  x = x < 0 ? 0 : x > w - 1 ? w - 1 : x;
+  y = y < 0 ? 0 : y > h - 1 ? h - 1 : y;
+  const x0 = x | 0, y0 = y | 0, x1 = x0 < w - 1 ? x0 + 1 : x0, y1 = y0 < h - 1 ? y0 + 1 : y0;
+  const fx = x - x0, fy = y - y0;
+  return (F[y0 * w + x0] * (1 - fx) + F[y0 * w + x1] * fx) * (1 - fy) +
+    (F[y1 * w + x0] * (1 - fx) + F[y1 * w + x1] * fx) * fy;
+}
+
+/** Central-difference gradient of a w×h field, clamped (Neumann) edges. */
+export function centralGradient(u, w, h) {
+  const ux = new Float64Array(w * h), uy = new Float64Array(w * h);
   for (let y = 0; y < h; y++) {
     const yu = y > 0 ? y - 1 : 0, yd = y < h - 1 ? y + 1 : h - 1;
     for (let x = 0; x < w; x++) {
       const xl = x > 0 ? x - 1 : 0, xr = x < w - 1 ? x + 1 : w - 1;
-      let sum = 0, best = -1;
-      for (const c of chans) {
-        const d = c.data;
-        const ax = (d[y * w + xr] - d[y * w + xl]) / 2, ay = (d[yd * w + x] - d[yu * w + x]) / 2;
-        const m2 = ax * ax + ay * ay;
-        sum += m2;
-        if (m2 > best) { best = m2; gx[y * w + x] = ax; gy[y * w + x] = ay; }
-      }
-      mag[y * w + x] = Math.sqrt(sum);
+      ux[y * w + x] = (u[y * w + xr] - u[y * w + xl]) / 2;
+      uy[y * w + x] = (u[yd * w + x] - u[yu * w + x]) / 2;
     }
+  }
+  return { ux, uy };
+}
+
+/** Summed gradient over channels, plus the direction of the strongest channel. */
+function gradient(chans) {
+  const { w, h } = chans[0];
+  const per = chans.map((c) => centralGradient(c.data, w, h));
+  const mag = new Float32Array(w * h), gx = new Float32Array(w * h), gy = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    let sum = 0, best = -1;
+    for (const { ux, uy } of per) {
+      const m2 = ux[i] * ux[i] + uy[i] * uy[i];
+      sum += m2;
+      if (m2 > best) { best = m2; gx[i] = ux[i]; gy[i] = uy[i]; }
+    }
+    mag[i] = Math.sqrt(sum);
   }
   return { mag, gx, gy, w, h };
 }
 
-/** The value below which fraction q of `arr` lies, by a 2048-bin histogram. */
-function quantile(arr, q) {
-  let max = 0;
-  for (let i = 0; i < arr.length; i++) if (arr[i] > max) max = arr[i];
+/**
+ * The value below which fraction q of `arr` lies, by a 2048-bin histogram over
+ * [0, max], so for non-negative values; only where `mask` is set, if given.
+ * 0 when there is nothing (or nothing above 0) to measure.
+ */
+export function quantile(arr, q, mask = null) {
+  let max = 0, n = 0;
+  for (let i = 0; i < arr.length; i++) {
+    if (mask && !mask[i]) continue;
+    n++;
+    if (arr[i] > max) max = arr[i];
+  }
   if (max === 0) return 0;
   const bins = new Uint32Array(2048);
-  for (let i = 0; i < arr.length; i++) bins[Math.min(2047, Math.floor((arr[i] / max) * 2048))]++;
-  const want = q * arr.length;
+  for (let i = 0; i < arr.length; i++) if (!mask || mask[i]) bins[Math.min(2047, Math.floor((arr[i] / max) * 2048))]++;
+  const want = q * n;
   let acc = 0;
   for (let b = 0; b < 2048; b++) { acc += bins[b]; if (acc >= want) return ((b + 1) / 2048) * max; }
   return max;

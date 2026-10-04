@@ -24,15 +24,18 @@ import { openFraction } from './shapes.js';
  * why not a raster).
  * @returns {Float64Array} cols*rows*D, linear
  */
-export function stackColors(ctx, sizes, spec) {
-  const N = ctx.cols * ctx.rows, D = ctx.D;
+export const stackColors = (ctx, sizes, spec) =>
+  stackColorsBy(sizes, ctx.palette, ctx.cols * ctx.rows, ctx.D, (s) => openFraction(spec, s, ctx.pitch));
+
+/** The same for any hole family: `fOf(size)` is its open fraction of a cell. */
+export function stackColorsBy(sizes, palette, N, D, fOf) {
   const out = new Float64Array(N * D);
   const f = new Float64Array(sizes.length);
   const vis = new Float64Array(sizes.length + 1);
   const col = new Float64Array(D);
   for (let c = 0; c < N; c++) {
-    for (let j = 0; j < sizes.length; j++) f[j] = openFraction(spec, sizes[j][c], ctx.pitch);
-    mixColor(visibleMix(f, vis), ctx.palette, col);
+    for (let j = 0; j < sizes.length; j++) f[j] = fOf(sizes[j][c]);
+    mixColor(visibleMix(f, vis), palette, col);
     for (let d = 0; d < D; d++) out[c * D + d] = col[d];
   }
   return out;

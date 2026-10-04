@@ -24,9 +24,9 @@
 
 import { makeImage } from '../shim/image.js';
 import { mulberry32 } from '../shim/random.js';
-import { toEncoded, LINEAR_LUT } from './color.js';
+import { toEncoded, LINEAR_LUT, luminance } from './color.js';
 import { detailMap, edgePoints } from './features.js';
-import { lloyd, Crowd } from './seeds.js';
+import { lloyd, Crowd, fillCandidates } from './seeds.js';
 import { triangulate } from './delaunay.js';
 
 const MAX_POINTS = 30000;
@@ -56,7 +56,7 @@ export function lowPolyMesh(rgba, p, widthMm) {
     // spacing from detail
     const lum = makeImage(W, H);
     for (let i = 0, q = 0; i < W * H; i++, q += 4) {
-      lum.data[i] = (0.2126 * rgba.data[q] + 0.7152 * rgba.data[q + 1] + 0.0722 * rgba.data[q + 2]) / 255;
+      lum.data[i] = luminance(rgba.data[q], rgba.data[q + 1], rgba.data[q + 2]) / 255;
     }
     const sMax = size, sMin = size * (1 - Math.min(0.9, p.detail));
     const detail = p.detail > 0 ? detailMap([lum], Math.max(0.7, sMin / 3)) : null;
@@ -84,14 +84,7 @@ export function lowPolyMesh(rgba, p, widthMm) {
       }
     }
     // fill, in seeded random order
-    const rand = mulberry32(p.seed | 0);
-    const cand = [];
-    const step = 0.4 * sMin;
-    for (let y = step / 2; y < H; y += step) {
-      for (let x = step / 2; x < W; x += step) cand.push([x + (rand() - 0.5) * step, y + (rand() - 0.5) * step]);
-    }
-    for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
-    for (const [x, y] of cand) {
+    for (const [x, y] of fillCandidates([0, 0, W, H], 0.4 * sMin, mulberry32(p.seed | 0))) {
       if (x < 0 || y < 0 || x > W || y > H) continue;
       if (clear(x, y, 0.85 * spacingAt(x, y))) put(x, y, false);
     }
@@ -107,32 +100,41 @@ export function lowPolyMesh(rgba, p, widthMm) {
 }
 
 /**
+ * Which triangle owns each pixel of a w×h raster, by pixel center; -1 where none
+ * does. Points are scaled by (sx, sy) into pixels first. Shared edges are
+ * inclusive, so nothing falls through a crack between two triangles (a pixel on
+ * an edge goes to the later one). Triangles are counter-clockwise, as
+ * core/delaunay.js returns them. Shared with the Facets pattern.
+ */
+export function triangleOwners(xs, ys, tris, n, w, h, sx = 1, sy = 1) {
+  const owner = new Int32Array(w * h).fill(-1);
+  const eps = -1e-9;
+  for (let t = 0; t < n; t++) {
+    const a = tris[3 * t], b = tris[3 * t + 1], c = tris[3 * t + 2];
+    const ax = xs[a] * sx, ay = ys[a] * sy, bx = xs[b] * sx, by = ys[b] * sy, cx = xs[c] * sx, cy = ys[c] * sy;
+    const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx) - 0.5)), x1 = Math.min(w - 1, Math.ceil(Math.max(ax, bx, cx)));
+    const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy) - 0.5)), y1 = Math.min(h - 1, Math.ceil(Math.max(ay, by, cy)));
+    for (let y = y0; y <= y1; y++) {
+      const py = y + 0.5;
+      for (let x = x0; x <= x1; x++) {
+        const px = x + 0.5;
+        if ((bx - ax) * (py - ay) - (by - ay) * (px - ax) >= eps &&
+          (cx - bx) * (py - by) - (cy - by) * (px - bx) >= eps &&
+          (ax - cx) * (py - cy) - (ay - cy) * (px - cx) >= eps) owner[y * w + x] = t;
+      }
+    }
+  }
+  return owner;
+}
+
+/**
  * The low-poly image: every pixel takes its facet's color.
  * @param {{layout, size, detail, edges, edgeThreshold, color, seed}} p
  */
 export function lowPoly(rgba, p, widthMm) {
   const W = rgba.width, H = rgba.height, src = rgba.data;
   const { xs, ys, tris, n } = lowPolyMesh(rgba, p, widthMm);
-  const owner = new Int32Array(W * H).fill(-1);
-  // assign pixels by their centers; shared edges are inclusive, so nothing falls
-  // through a crack between two facets (a pixel on an edge goes to the later one)
-  for (let t = 0; t < n; t++) {
-    const a = tris[3 * t], b = tris[3 * t + 1], c = tris[3 * t + 2];
-    const ax = xs[a], ay = ys[a], bx = xs[b], by = ys[b], cx = xs[c], cy = ys[c];
-    const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx) - 0.5)), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx, cx)));
-    const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy) - 0.5)), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by, cy)));
-    const eps = -1e-9;
-    for (let y = y0; y <= y1; y++) {
-      const py = y + 0.5;
-      for (let x = x0; x <= x1; x++) {
-        const px = x + 0.5;
-        const w0 = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
-        const w1 = (cx - bx) * (py - by) - (cy - by) * (px - bx);
-        const w2 = (ax - cx) * (py - cy) - (ay - cy) * (px - cx);
-        if (w0 >= eps && w1 >= eps && w2 >= eps) owner[y * W + x] = t;   // counter-clockwise
-      }
-    }
-  }
+  const owner = triangleOwners(xs, ys, tris, n, W, H);
   // any pixel still unowned (only possible at the outermost rim) takes a neighbor's facet
   for (let i = 0; i < W * H; i++) if (owner[i] < 0) owner[i] = owner[i > 0 ? i - 1 : i + 1] >= 0 ? owner[i > 0 ? i - 1 : i + 1] : 0;
 

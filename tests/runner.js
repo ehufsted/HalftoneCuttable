@@ -5,6 +5,8 @@
 // ways.
 
 import { mulberry32 } from '../src/shim/random.js';
+import { rasterizeHoles } from '../src/core/render.js';
+import { edt, components } from '../src/core/edt.js';
 
 const html = [];
 export const say = (s) => html.push(s);
@@ -59,6 +61,29 @@ export function noiseRGBA(w, h, seed, color = true) {
     const r = rand() * 255;
     return color ? [r, rand() * 255, rand() * 255] : [r, r, r];
   });
+}
+
+/**
+ * One sheet's metal, from its holes, on an independent raster at pxPerMm (holes
+ * grown by the kerf, render.rasterizeHoles). `at(x, y)` reads it in mm.
+ */
+export function metalOf(piece, holes, kerf, pxPerMm = 20) {
+  const r = rasterizeHoles({ widthMm: piece.widthMm, heightMm: piece.heightMm, kerf }, [holes], { pxPerMm, superSample: 1 });
+  const M = new Uint8Array(r.w * r.h);
+  for (let i = 0; i < M.length; i++) M[i] = r.counts[2 * i] ? 1 : 0;
+  return { M, w: r.w, h: r.h, at: (xmm, ymm) => M[Math.floor(ymm * pxPerMm) * r.w + Math.floor(xmm * pxPerMm)] };
+}
+
+/**
+ * Pieces of metal once shrunk by just under web/2: 1 means every connection is
+ * at least the web wide, a stronger claim than merely one piece.
+ */
+export function thickPieces(M, w, h, web, pxPerMm = 20) {
+  const d = edt(M.map((v) => 1 - v), w, h);
+  const core = new Uint8Array(M.length);
+  const r = (web / 2) * pxPerMm - 1.5;
+  for (let i = 0; i < M.length; i++) core[i] = M[i] && d[i] > r ? 1 : 0;
+  return components(core, w, h).sizes.length;
 }
 
 /** Settings that make the maths easy to predict: no gamma, brightness or saturation shift. */

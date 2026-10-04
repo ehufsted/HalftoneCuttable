@@ -31,12 +31,29 @@
 // HALFTONE INSIDE SHAPES (checkbox) replaces 3-5: each shape is filled with a
 // grid of round holes sized by the tone inside it, each kept within its shape.
 // Separate convex holes cannot enclose metal, so no bridges are needed.
+//
+// BRIGHTNESS LAYERS (levels > 0, not with halftone): N extra sheets per color,
+// stacked directly on top of that color's own sheet, so brighter parts of each
+// color's region stand higher, like a topographic map. For color l and level i
+// of N, the level is lo + (hi - lo)·i/(N+1), spaced evenly in encoded or
+// linear values. [lo, hi] is the luminance range of color l's region, all of
+// it together: the 1st to 99th percentile over its CORE, the region less a rim
+// along its edge, where the brightness is smoothed within the region on its
+// own (regionField) so a neighbor's edge cannot leak in. The sheet is METAL in
+// region l where the luminance is at least the level, and also wherever a
+// sheet above hides it (label < l: solid, which keeps it strong). It is CUT in
+// the rest of region l and wherever a deeper color shows (exactly sheet l's
+// own raw cut, registration extension included). Then steps 3-5 as for any
+// sheet. Returned as `levels`, in stack order (color by color, top level
+// first); `layers` is unchanged, so the scores are too -- seen from above, a
+// brightness layer is its own sheet's color. A color whose region is empty or
+// flat gets no brightness layers, and says so.
 
 import { linearPlanes, prepareRaster } from '../core/units.js';
 import { resize } from '../shim/image.js';
 import { toEncoded, encodeFast, luminance } from '../core/color.js';
-import { blur } from '../core/features.js';
-import { edt, dilate, invert, components } from '../core/edt.js';
+import { blur, quantile } from '../core/features.js';
+import { edt, dilate, erode, invert, components } from '../core/edt.js';
 import { sheetTools, scoreWindows, workRaster, sheetFrame } from '../core/cutsheet.js';
 
 export const id = 'stencil';
@@ -59,6 +76,11 @@ export const params = [
     when: (p) => !p.halftone && !p.floating },
   { key: 'bridgeWidth', label: 'Bridge width', type: 'range', min: 0.3, max: 5, step: 0.1, def: 1.2, unit: 'mm', dp: 1,
     when: (p) => !p.halftone && !p.floating },
+  { key: 'levels', label: 'Brightness layers per color', type: 'range', min: 0, max: 8, step: 1, def: 0,
+    when: (p) => !p.halftone },
+  { key: 'levelSpace', label: 'Level spacing', type: 'select', def: 'encoded',
+    options: [['encoded', 'Even as seen (encoded)'], ['linear', 'Even in linear light']],
+    when: (p) => !p.halftone && p.levels > 0 },
 ];
 
 const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
@@ -72,6 +94,7 @@ export function build(rgba, settings, params = {}) {
   // ---- the work raster
   const { ww, wh, k, ky, NP } = workRaster(W, H, web, WORK_PIXELS);
   let planes = linearPlanes(rgba).map((pl) => resize(pl, ww, wh));
+  const unsmoothed = planes;     // the brightness layers smooth per region instead
   if (P.smooth > 0) planes = planes.map((pl) => blur(pl, P.smooth * k));
 
   // ---- 1. posterize
@@ -120,9 +143,12 @@ export function build(rgba, settings, params = {}) {
   const { cleanSheet, bridgeSheet, finishSheet, measureWeb, traceSheet } = sheetTools({
     ww, wh, k, ky, frame, web, hFloor, kerf, bridgeWidth: P.bridgeWidth, bridgeStyle: P.bridges,
   });
-  let layers, webs, cellsLabel, tgtPix;
+  let layers, webs, cellsLabel, tgtPix, levels = [];
 
   if (!P.halftone) {
+    // the brightness layers start from each sheet's RAW cut, before cleanup;
+    // cleanSheet makes a new raster, so keeping the old references is enough
+    const rawCuts = P.levels > 0 ? cuts.slice() : null;
     // ---- 3-5, per sheet
     layers = []; webs = [];
     let contours = 0;
@@ -148,6 +174,7 @@ export function build(rgba, settings, params = {}) {
     if (debug.unresolved) notes.push(`${debug.unresolved} parts could NOT be bridged — they will fall out`);
     if (debug.floating) notes.push(`${debug.floating} floating parts to glue down`);
     if (debug.specks) notes.push(`${debug.specks} metal specks too small to hold were cut away`);
+    if (rawCuts) levels = brightnessLayers(rawCuts);
   } else {
     ({ layers, webs, tgtPix, cellsLabel } = halftoneShapes());
   }
@@ -159,7 +186,7 @@ export function build(rgba, settings, params = {}) {
 
   return {
     widthMm: W, heightMm: H, mode: bw ? 'bw' : 'color', D, N: NW, palette,
-    target, achieved, source, layers, webs, cellAt,
+    target, achieved, source, layers, webs, cellAt, levels,
     imageRect: { x: 0, y: 0, w: W, h: H },
     // dropped/saturated are honestly 0, not just unset: a plain cutout has no
     // per-cell hole size to pin at a floor or a ceiling. Halftone mode DOES have
@@ -172,6 +199,100 @@ export function build(rgba, settings, params = {}) {
 
   // ======================================================================
   // helpers (closures over the raster)
+
+  /**
+   * The brightness layers: per color, N sheets cut along isocontours of the
+   * luminance inside that color's region (see the header). Their bridges and
+   * counts are kept apart from the main sheets', so those notes do not change.
+   * @returns {Array<{color, level, of, value, range, holes, web}>} stack order
+   */
+  function brightnessLayers(rawCuts) {
+    const N = Math.round(P.levels);
+    const enc = P.levelSpace !== 'linear';
+    const val0 = new Float32Array(NP);
+    const [pr, pg, pb] = unsmoothed.map((pl) => pl.data);
+    for (let q = 0; q < NP; q++) {
+      const c = Math.max(0, Math.min(1, luminance(pr[q], pg[q], pb[q])));
+      val0[q] = enc ? encodeFast(c) : c;
+    }
+    const dbg = { bridges: [], fallback: 0, unresolved: 0, specks: 0, floating: 0, cores: [] };
+    const out = [], flat = [];
+    // B&W: only the metal sheet is a material; the "white" is the backdrop
+    for (let l = 0; l < (bw ? 1 : n); l++) {
+      const { val, core } = regionField(val0, l);
+      dbg.cores[l] = core;
+      // 1st to 99th percentile, so a few stray pixels of grain cannot set it
+      const lo = quantile(val, 0.01, core), hi = quantile(val, 0.99, core);
+      if (!(hi - lo > 1e-3)) { flat.push(l); continue; }
+      const own = l < nCut ? rawCuts[l] : null;
+      // top level first: the smallest, brightest sheet sits highest
+      for (let i = N; i >= 1; i--) {
+        const t = lo + ((hi - lo) * i) / (N + 1);
+        let C = new Uint8Array(NP);
+        for (let q = 0; q < NP; q++) {
+          C[q] = !frame[q] && ((own && own[q]) || (lab[q] === l && val[q] < t)) ? 1 : 0;
+        }
+        C = cleanSheet(C, dbg);
+        let w = web;
+        if (!P.floating) {
+          C = finishSheet(bridgeSheet(C, dbg), dbg);
+          w = measureWeb(C);
+        } else {
+          dbg.floating += Math.max(0, components(invert(C), ww, wh).sizes.length - 1);
+        }
+        out.push({ color: l, level: i, of: N, value: t, range: [lo, hi], holes: traceSheet(C), web: w });
+      }
+    }
+    if (out.length) {
+      const what = `${out.length} brightness layer${out.length === 1 ? '' : 's'}`;
+      notes.push(dbg.bridges.length ? `${what} (${dbg.bridges.length} bridges)` : what);
+    }
+    if (flat.length) {
+      const which = flat.map((l) => (bw ? 'the sheet' : `sheet ${l + 1}`)).join(', ');
+      const why = bw ? 'flat' : 'empty or flat';
+      notes.push(`no brightness layers for ${which}: ${flat.length > 1 ? 'their regions are' : 'its region is'} ${why}`);
+    }
+    // the same warnings as the main sheets', said of the layers
+    if (dbg.fallback) notes.push(`${dbg.fallback} parts of the brightness layers could not be bridged ${P.bridges} and were bridged at an angle`);
+    if (dbg.unresolved) notes.push(`${dbg.unresolved} parts of the brightness layers could NOT be bridged — they will fall out`);
+    if (dbg.floating) notes.push(`${dbg.floating} floating parts in the brightness layers to glue down`);
+    if (dbg.specks) notes.push(`${dbg.specks} metal specks in the brightness layers too small to hold were cut away`);
+    debug.levels = dbg;
+    return out;
+  }
+
+  /**
+   * Color l's brightness, smoothed WITHIN its own region: a normalized
+   * convolution (blur of value × mask over blur of mask) of the UNSMOOTHED
+   * brightness over the region's CORE, the region less a rim as wide as the
+   * smoothing reaches (2σ) plus 1.5 px for the resize's own blending. Taking
+   * the smoothed image's brightness as it stands gave each region a rim of its
+   * neighbors' values: on a flat region that rim alone set the range, and on
+   * any region a rim brighter than a level became a sliver of metal that the
+   * cleanup thickened into a raised strip along the neighbor. The rim is also
+   * where the labels (from the smoothed image) disagree with the unsmoothed
+   * pixels. Rim pixels take their value from the core nearby; pixels farther
+   * than the rim from any core stand in for themselves. That is by distance,
+   * not per connected part, so a thin tail on a thick part keeps its own
+   * values instead of taking the far-off core's. A convex corner's rim is no
+   * farther than that: the labels come from the smoothed image, so their
+   * corners are rounded at the scale of R (checked by the harness).
+   */
+  function regionField(val0, l) {
+    const mask = new Uint8Array(NP);
+    for (let q = 0; q < NP; q++) mask[q] = lab[q] === l && !frame[q] ? 1 : 0;
+    const R = 1.5 + 2 * P.smooth * k;
+    const core = erode(mask, ww, wh, R);
+    const dCore = edt(core, ww, wh);
+    for (let q = 0; q < NP; q++) if (mask[q] && dCore[q] > R + 1) core[q] = 1;
+    const num = new Float32Array(NP), den = new Float32Array(NP);
+    for (let q = 0; q < NP; q++) if (core[q]) { num[q] = val0[q]; den[q] = 1; }
+    const sig = Math.max(P.smooth * k, 1.5);
+    const bn = blur({ w: ww, h: wh, data: num }, sig).data, bd = blur({ w: ww, h: wh, data: den }, sig).data;
+    const val = new Float32Array(NP);
+    for (let q = 0; q < NP; q++) if (mask[q]) val[q] = bd[q] > 1e-6 ? bn[q] / bd[q] : val0[q];
+    return { val, core };
+  }
 
   /** Halftone inside shapes: a grid of round holes, each kept within its shape. */
   function halftoneShapes() {

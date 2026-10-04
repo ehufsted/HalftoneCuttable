@@ -5,7 +5,8 @@
 import { METHODS, byId, defaultsFor, paramVisible } from './methods/index.js';
 import { layerSVG, downloadSVG, downloadFile, HOLE_STROKE, OUTLINE_STROKE } from './core/svg.js';
 import { layerDXF } from './core/dxf.js';
-import { sheetFileName } from './core/names.js';
+import { sheetFileName, levelFileName } from './core/names.js';
+import { physicalStack } from './core/stack.js';
 import { FILTERS, filterById } from './core/style.js';
 import { holePathData } from './core/holes.js';
 import { MAX_CELLS } from './core/units.js';
@@ -356,10 +357,10 @@ function paintCut(ctx, res) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, pv.w, pv.h);
   const li = parseInt($('cutLayer').value || '0', 10);
-  // Every sheet gets the alignment holes too, including the solid base (li
-  // beyond layers.length, which has no pattern holes of its own) -- same as
-  // exportLayer.
-  const holes = (res.layers[li] || []).concat(res.align || []);
+  // Every sheet gets the alignment holes too, including the solid base (which
+  // has no pattern holes of its own) -- same as exportLayer.
+  const sheet = exportSheets(res)[li];
+  const holes = (sheet ? sheet.holes : []).concat(res.align || []);
   ctx.save();
   ctx.scale(k, k);
   ctx.lineWidth = Math.max(0.6 / k, 0.02);
@@ -398,7 +399,8 @@ function updateStats() {
   const res = state.result;
   if (!res) return;
   const st = res.stats;
-  const L = st.layers;
+  // every cut sheet, the Stencil's brightness layers included
+  const L = st.layers.concat(st.levels || []);
   const holes = L.reduce((a, l) => a + l.holes, 0);
   // A stack's solid base is cut too: its outline and one pierce.
   const base = res.piece.mode === 'color' ? outlineLength(res.piece) : 0;
@@ -462,23 +464,48 @@ function buildPalette() {
 /** Per-sheet export buttons and the Cut-paths sheet picker, sized to the result. */
 function buildLayerControls() {
   const res = state.result;
-  const names = res.piece.mode === 'color' ? sheetNamesFor(res.piece.nCut + 1) : ['Sheet'];
+  const sheets = exportSheets(res);
   const host = $('layerExports');
   host.innerHTML = '';
-  names.forEach((name, i) => {
+  sheets.forEach(({ name, file }, i) => {
     for (const ext of ['svg', 'dxf']) {
       const b = document.createElement('button');
       b.className = 'mini';
       b.textContent = `${name} ${ext.toUpperCase()}`;
-      b.title = `download ${name.toLowerCase()} as ${ext.toUpperCase()}: ${layerFileName(i, ext)}`;
+      b.title = `download ${name.toLowerCase()} as ${ext.toUpperCase()}: ${file(ext)}`;
       b.addEventListener('click', () => exportLayer(i, ext));
       host.appendChild(b);
     }
   });
   const sel = $('cutLayer');
   const prev = sel.value;
-  sel.innerHTML = names.map((n, i) => `<option value="${i}">${n}</option>`).join('');
-  if (prev && parseInt(prev, 10) < names.length) sel.value = prev;
+  sel.innerHTML = sheets.map((s, i) => `<option value="${i}">${s.name}</option>`).join('');
+  if (prev && parseInt(prev, 10) < sheets.length) sel.value = prev;
+  // labeled by what the result holds (B&W with brightness layers is several
+  // files too), so a mode switch does not relabel them before the re-run
+  $('exportAll').textContent = sheets.length > 1 ? 'Export all SVG' : 'Export SVG';
+  $('exportAllDxf').textContent = sheets.length > 1 ? 'Export all DXF' : 'Export DXF';
+}
+
+/**
+ * Every sheet to cut, top of the stack first (core/stack.js): the pattern's
+ * sheets, the solid base, and the Stencil's brightness layers, each sitting on
+ * its own color's sheet. {name, holes, file(ext)}, holes without the alignment
+ * holes, which every exported sheet gets.
+ */
+function exportSheets(res) {
+  const bw = res.piece.mode !== 'color';
+  const names = bw ? ['Sheet'] : sheetNamesFor(res.piece.nCut + 1);
+  // DXF names carry the sheet's hex color; SVG names do not
+  return physicalStack(res.layers, res.levels || [], bw).map(({ color, holes, level }) => (level
+    ? {
+      name: `${names[color]} level ${level.level}`, holes,
+      file: (ext) => levelFileName(state.imageName, color, level.level, res.piece, ext, ext === 'dxf'),
+    }
+    : {
+      name: names[color], holes,
+      file: (ext) => sheetFileName(state.imageName, color, res.piece, ext, ext === 'dxf'),
+    }));
 }
 
 function sheetNamesFor(n) {
@@ -486,16 +513,15 @@ function sheetNamesFor(n) {
     i === 0 ? 'Top sheet' : i === n - 1 ? 'Base (solid)' : `Sheet ${i + 1}`);
 }
 
-/** SVG names as before; DXF names carry the sheet's hex color. */
-const layerFileName = (i, ext = 'svg') => sheetFileName(state.imageName, i, state.result.piece, ext, ext === 'dxf');
-
 function exportLayer(i, ext = 'svg') {
   const res = state.result;
   if (!res) return;
-  // Every exported sheet gets the alignment holes too, including the solid base
-  // (index >= layers.length, which has no pattern holes of its own).
-  const holes = (res.layers[i] || []).concat(res.align || []);
-  const name = layerFileName(i, ext);
+  const sheet = exportSheets(res)[i];
+  if (!sheet) return;
+  // Every exported sheet gets the alignment holes too, including the solid base,
+  // which has no pattern holes of its own.
+  const holes = sheet.holes.concat(res.align || []);
+  const name = sheet.file(ext);
   if (ext === 'dxf') downloadFile(layerDXF(res.piece, holes).text, name, 'application/dxf');
   else downloadSVG(layerSVG(res.piece, holes, { name }).text, name);
 }
@@ -503,7 +529,7 @@ function exportLayer(i, ext = 'svg') {
 async function exportAll(ext = 'svg') {
   const res = state.result;
   if (!res) return;
-  const n = res.piece.mode === 'color' ? res.piece.nCut + 1 : 1;
+  const n = exportSheets(res).length;
   for (let i = 0; i < n; i++) {
     exportLayer(i, ext);
     // Browsers drop back-to-back downloads fired in the same tick.
@@ -734,8 +760,6 @@ function updateModeUI() {
   $('colorGroup').hidden = !color;
   document.querySelector('[data-view="backlit"]').hidden = color;
   if (color && state.view === 'backlit') setView('result');
-  $('exportAll').textContent = color ? 'Export all SVG' : 'Export SVG';
-  $('exportAllDxf').textContent = color ? 'Export all DXF' : 'Export DXF';
 }
 
 function setView(v) {

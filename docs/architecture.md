@@ -13,6 +13,7 @@ core/      units, shapes, color, separate, diffuse, render, cutpaths, svg, struc
            cutsheet (the stencil/screen per-sheet pipeline and window scoring),
            steer (direction fields and blurs steered along them),
            style (the style-filter registry and chain), kuwahara, lowpoly,
+           stack (the physical sheet order with the Stencil's brightness layers),
            delaunay (ported verbatim from HalftoneWebPAL-1)
 methods/   one module per pattern, plus two engines patterns share (cellWeb: the
            cell webs; gridTone: the fixed grids' tone); imports core/ only
@@ -74,7 +75,6 @@ directly, the same code the square grid uses.
 A pattern where holes span cells (slots, a connected web) needs its own reasoning and
 its own entries in `tests/structure.js`.
 
-## One hole family
 **The alignment holes are added after the pattern, so the pipeline keeps the
 argument for them.** A pattern never knows where they go. `alignmentHoles` keeps a
 web to the outline, and `dropNearAlignment` drops any pattern hole within a web of
@@ -84,6 +84,7 @@ stencil and the screen keep that metal on their raster instead
 defaults put pattern holes inside the web, and a 1 mm distance cut through the
 outline into 5 pieces (`tests/pipeline.js` checks both now).
 
+## One hole family
 
 Every hole is a rounded square: side `a`, radius `r`, optionally turned 45°. A circle is
 `r = a/2`, and a diamond is a turned square. This gives one closed-form area, one
@@ -249,6 +250,33 @@ A new cell shape (a hex grid, quads, anything convex) is a new layout function.
   shape. The cap subtracts 1.25 px, because the distance is measured between pixel
   centers; without that, holes poked out of their shape by up to a pixel (caught by
   the harness).
+- **Brightness layers are extra sheets, kept out of `layers`.** Color l's N layers
+  sit directly on sheet l, highest level first (`core/stack.js`), so a layer is
+  always the color of the region it sits in, and the scores, which read `layers`
+  only, cannot change. A layer is metal in region l at or above its level, and
+  metal wherever a sheet above hides it (label < l), which keeps it strong. It is
+  cut in the rest of region l and wherever a deeper color shows: exactly sheet l's
+  raw cut, with the registration extension included. Then the same cleanup, bridges
+  and trace as any sheet. The base color's layers sit on the base. In B&W only the
+  metal sheet is a material, so only it gets layers.
+- **Each region's brightness is smoothed on its own.** Taking it from the smoothed
+  image gave each region a rim of its neighbors' values. On a flat region that rim
+  alone set the range. On any region, a rim brighter than a level became a metal
+  sliver that the cleanup thickened into a raised strip along the neighbor, and it
+  showed as spurious bridges (14 against 4 on the harness's color fixture). The
+  labels come from the smoothed image, so the rim is also where they disagree with
+  the unsmoothed pixels. `regionField` therefore takes the UNSMOOTHED brightness
+  and runs a normalized convolution over the region's core: the region less 2σ of
+  smoothing plus 1.5 px for the resize's own blending. The range is the 1st to 99th
+  percentile over that core. Eroding by 1.5 px alone was not enough, because the
+  label-versus-pixel strip is as wide as the smoothing.
+- **The Result view draws the whole physical stack** when there are layers, so a
+  layer's bridge across a deeper color shows as it would on the piece. Then
+  `render.outlineSteps` outlines every place the visible surface steps up onto a
+  layer, on the higher side, in `color.fadedRGB` of the layer's color: 45% of the
+  way to white for a dark color and to black for a light one, since fading toward
+  gray would hide a gray sheet's outline. A layer hidden under a sheet draws
+  nothing. Source and Diff are untouched.
 
 ## Screen
 

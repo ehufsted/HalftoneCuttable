@@ -13,10 +13,11 @@
 // numbers read like the other app's even though the arithmetic is linear.
 
 import { DEFAULTS, applyTone } from './core/units.js';
-import { rasterizeHoles, composite } from './core/render.js';
+import { rasterizeHoles, composite, outlineSteps } from './core/render.js';
 import { layerStats } from './core/structure.js';
 import { alignmentHoles, dropBorder, dropNearAlignment } from './core/holes.js';
-import { toEncoded, luminance, hexToLinear } from './core/color.js';
+import { toEncoded, luminance, hexToLinear, fadedRGB } from './core/color.js';
+import { physicalStack } from './core/stack.js';
 import { byId } from './methods/index.js';
 import { applyStyle } from './core/style.js';
 
@@ -81,9 +82,14 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
     const kept = s.border > 0 ? dropBorder(holes, b.widthMm, b.heightMm, s.border, s.kerf / 2) : holes;
     return dropNearAlignment(kept, align, s.web, s.kerf / 2);
   });
+  // The Stencil's brightness layers: extra sheets, each cut whole (the border
+  // is already in their raster's rim, as for the Stencil's own sheets). They are
+  // not in `layers`, so the scores above never see them.
+  const levels = b.levels || [];
   const out = {
     piece,
     layers,
+    levels,
     align,
     note: b.note || '',
     stats: {
@@ -91,6 +97,7 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
       // The stats charge for the alignment holes too -- they are really cut --
       // but not for whatever the border dropped, which is really not.
       layers: layers.map((holes, j) => layerStats(piece, holes.concat(align), b.webs[j], machine)),
+      levels: levels.map((lv) => layerStats(piece, lv.holes.concat(align), lv.web, machine)),
       fidelity: fid / (N * D), reach: reach / (N * D),
     },
   };
@@ -99,16 +106,28 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
   // The Result/backlit composites are physical views -- "as the stacked sheets
   // look" -- and an alignment hole really is cut through every sheet, so it
   // shows here as a plain through-hole too, not as a marker drawn over the top.
-  const withAlign = align.length ? layers.map((holes) => holes.concat(align)) : layers;
-  const pre = rasterizeHoles(piece, withAlign, { maxDim: opts.maxDim });
   const bw = b.mode === 'bw';
   const display = bw
     ? [hexToLinear(s.sheet || '#2b2b2b'), hexToLinear(s.backdrop || '#ffffff')]
     : b.palette;
+  // With brightness layers, the whole physical stack is drawn (so a layer's
+  // bridge over a deeper color shows, as it would on the piece), and each
+  // layer's visible edges are outlined in a faded version of its color --
+  // seen straight on, a layer is the same color as the sheet under it, and
+  // would not show at all. The solid base is the stack's floor, not a layer;
+  // without brightness layers this is just `layers`.
+  const stack = physicalStack(layers, levels, bw).filter((e) => !e.base);
+  const cut = stack.map((e) => (align.length ? e.holes.concat(align) : e.holes));
+  const pre = rasterizeHoles(piece, cut, { maxDim: opts.maxDim });
+  const colors = stack.map((e) => display[e.color]).concat([display[layers.length]]);
+  const result = composite(pre, colors);
+  if (levels.length) {
+    outlineSteps(result, pre, stack.map((e) => (e.level ? fadedRGB(display[e.color]) : null)).concat([null]));
+  }
   out.preview = {
     w: pre.w, h: pre.h, pxPerMm: pre.pxPerMm,
-    result: composite(pre, display),
-    backlit: bw ? composite(pre, [[0.004, 0.004, 0.004], [1, 1, 1]]) : null,
+    result,
+    backlit: bw ? composite(pre, stack.map(() => [0.004, 0.004, 0.004]).concat([[1, 1, 1]])) : null,
     source: sourcePreview(styled, b.imageRect, pre, display[0]),
     diff: diffPreview(b.cellAt, pre, diffCell),
   };

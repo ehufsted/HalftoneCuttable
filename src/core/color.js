@@ -35,6 +35,18 @@ export function linearToHex(rgb) {
 }
 
 /**
+ * A faded version of a linear color, as ENCODED 0-255 [r, g, b], for drawing an
+ * outline over that same color: 45% of the way to white for a dark color, to
+ * black for a light one. Fading toward a fixed gray instead would leave a
+ * mid-gray sheet's outline the same as the sheet, invisible.
+ */
+export function fadedRGB(rgb) {
+  const enc = rgb.map((c) => toEncoded(c));
+  const to = toEncoded(luminance(rgb[0], rgb[1], rgb[2])) < 0.55 ? 1 : 0;
+  return enc.map((c) => Math.round(255 * (c + 0.45 * (to - c))));
+}
+
+/**
  * Linear sRGB -> OKLab (Björn Ottosson, 2020): a perceptually uniform space
  * (equal steps look equally different), unlike linear light (equal steps look
  * MORE different in the darks) or encoded sRGB (a gamma curve chosen for storage,

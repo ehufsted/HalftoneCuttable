@@ -12,6 +12,8 @@
 //   rasterizeHoles -- the preview, for any hole kind: per-sheet sample COUNTS per
 //                     pixel, so any palette (front-lit, backlit) composites from
 //                     one pass.
+//   outlineSteps    -- lines along the visible edges of marked sheets (the
+//                     Stencil's brightness layers), drawn over a composite.
 //   holeTables / measureCells -- the square grid's cell-aligned instrument, which
 //                     the harness uses to check the grid's holes against the
 //                     area law.
@@ -178,6 +180,50 @@ function fillEvenOdd(loops, sw, sh, k) {
     }
   }
   return out;
+}
+
+/**
+ * Outline the steps up onto marked sheets, in place on an RGBA composite. Each
+ * pixel's visible sheet is the one most of its samples show. Where two
+ * neighboring pixels show different sheets and the HIGHER one (nearer the top)
+ * is marked, the pixel on the higher side is painted that sheet's outline
+ * color -- so the line runs along the raised sheet's own visible edge, and a
+ * marked sheet hidden under another one draws nothing.
+ * @param {Uint8ClampedArray} rgba  composite(pre, ...)'s output, w*h*4
+ * @param {Array<number[]|null>} colors  per sheet (n entries): encoded 0-255
+ *                                       [r, g, b], or null for an unmarked sheet
+ * @returns {number} pixels painted
+ */
+export function outlineSteps(rgba, pre, colors) {
+  const { w, h, n, counts } = pre;
+  const vis = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    let best = 0, bc = -1;
+    for (let j = 0; j < n; j++) if (counts[i * n + j] > bc) { bc = counts[i * n + j]; best = j; }
+    vis[i] = best;
+  }
+  const mark = new Int16Array(w * h).fill(-1);
+  const step = (a, b) => {
+    const va = vis[a], vb = vis[b];
+    if (va === vb) return;
+    const hi = va < vb ? a : b;
+    if (colors[vis[hi]]) mark[hi] = vis[hi];
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (x + 1 < w) step(i, i + 1);
+      if (y + 1 < h) step(i, i + w);
+    }
+  }
+  let painted = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (mark[i] < 0) continue;
+    const c = colors[mark[i]];
+    rgba[4 * i] = c[0]; rgba[4 * i + 1] = c[1]; rgba[4 * i + 2] = c[2];
+    painted++;
+  }
+  return painted;
 }
 
 /**

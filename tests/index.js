@@ -19,6 +19,7 @@ import * as facets from './method.facets.js';
 import * as rectangles from './method.rectangles.js';
 import * as stipple from './method.stipple.js';
 import * as stencil from './method.stencil.js';
+import * as stencilLevels from './method.stencilLevels.js';
 import * as screen from './method.screen.js';
 import * as structure from './structure.js';
 import * as pipeline from './pipeline.js';
@@ -41,6 +42,7 @@ export const SECTIONS = [
   ['method.rectangles', rectangles],
   ['method.stipple', stipple],
   ['method.stencil', stencil],
+  ['method.stencilLevels', stencilLevels],
   ['method.screen', screen],
   ['structure', structure],
   ['pipeline', pipeline],

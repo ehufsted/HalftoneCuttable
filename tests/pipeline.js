@@ -1,8 +1,12 @@
 // End to end: the worker's whole job, run directly.
 
-import { check, section, num, grayRamp, noiseRGBA, flatGray, plain } from './runner.js';
+import { check, section, num, grayRamp, noiseRGBA, flatGray, plain, makeRGBA } from './runner.js';
 import { runPipeline } from '../src/pipeline.js';
+import { rasterizeHoles } from '../src/core/render.js';
 import { pieceCount } from '../src/core/structure.js';
+import { fadedRGB, hexToLinear } from '../src/core/color.js';
+
+const sameBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i] || (Number.isNaN(v) && Number.isNaN(b[i])));
 
 export function run() {
   section('pipeline', 'The chain the worker runs, both modes, previews included.');
@@ -77,5 +81,69 @@ export function run() {
     const sp = pieceCount(sten.piece, sten.layers[0].concat(sten.align), 20);
     check('stencil: metal at least a web wide round each alignment hole, the sheet one piece',
       worst >= st.web - 0.05 && sp === 1, `${num(worst, 3)} mm from an alignment hole to the cut, ${sp} piece(s)`);
+  }
+
+  // ---- Stencil brightness layers: outlined in Result only, in a faded version
+  // of their sheet's color, and only where they can be seen
+  {
+    const st = { ...plain, widthMm: 60, web: 0.6, minHole: 0.6, kerf: 0.15, sheet: '#2b2b2b', backdrop: '#ffffff' };
+    // a gray ramp, encoded 0 to 0.45 over the left 40 mm, white beyond
+    const img = makeRGBA(300, 200, (x) => {
+      if (x >= 200) return [255, 255, 255];
+      const v = Math.round(255 * 0.45 * x / 199);
+      return [v, v, v];
+    });
+    const off = runPipeline(img, st, 'stencil', {});
+    const zero = runPipeline(img, st, 'stencil', { levels: 0 });
+    check('stencil, layers off: no layers, and the previews are byte-for-byte the same as without the option',
+      off.levels.length === 0 && off.stats.levels.length === 0 &&
+      sameBytes(off.preview.result, zero.preview.result) && sameBytes(off.preview.backlit, zero.preview.backlit));
+
+    const on = runPipeline(img, st, 'stencil', { levels: 3 });
+    const pv = on.preview;
+    check('stencil, 3 layers: one stat row per layer, each with its outline and cuts',
+      on.levels.length === 3 && on.stats.levels.length === 3 && on.stats.levels.every((s) => s.holes > 0 && s.length > 0),
+      on.stats.levels.map((s) => `${s.holes} contours, ${Math.round(s.length)} mm`).join('; '));
+    check('the layers leave the Source and Diff views and the scores alone',
+      sameBytes(pv.source, off.preview.source) && sameBytes(pv.diff, off.preview.diff) &&
+      on.stats.fidelity === off.stats.fidelity && on.stats.reach === off.stats.reach);
+
+    const fade = fadedRGB(hexToLinear(st.sheet));
+    const isFade = (buf, i) => buf[4 * i] === fade[0] && buf[4 * i + 1] === fade[1] && buf[4 * i + 2] === fade[2];
+    let faded = 0, fadedOff = 0;
+    for (let i = 0; i < pv.w * pv.h; i++) { if (isFade(pv.result, i)) faded++; if (isFade(off.preview.result, i)) fadedOff++; }
+    check('Result shows outlines in the faded sheet color; without layers there are none', faded > 0 && fadedOff === 0,
+      `${faded} outline pixels, rgb(${fade.join(',')})`);
+    // each layer's edge on the row y = 20 mm: where its metal starts, at the
+    // preview's own resolution, should be outlined (within a pixel)
+    const row = Math.round(20 * pv.pxPerMm);
+    const hits = on.levels.map((c) => {
+      const r = rasterizeHoles({ ...on.piece }, [c.holes], { pxPerMm: pv.pxPerMm, superSample: 3 });
+      let x0 = -1;
+      for (let x = Math.round(3 * pv.pxPerMm); x < pv.w; x++) if (r.counts[2 * (row * r.w + x)] >= 5) { x0 = x; break; }
+      return x0 >= 0 && [-1, 0, 1].some((d) => isFade(pv.result, row * pv.w + x0 + d));
+    });
+    check('each layer’s visible edge is outlined', hits.every(Boolean), hits.join(', '));
+
+    // color: a red block with a ramp in it; the red layers run on under the dark
+    // top sheet, which hides them -- no outline there
+    const pal = ['#202020', '#d02020', '#2040d0'];
+    const cimg = makeRGBA(300, 200, (x, y) => (x >= 40 && x < 260 && y >= 50 && y < 150
+      ? [Math.round(150 + 105 * (x - 40) / 219), 32, 32] : [32, 32, 32]));
+    const col = runPipeline(cimg, { ...st, mode: 'color', palette: pal, reg: 0.3 }, 'stencil', { levels: 2 });
+    const cf = fadedRGB(hexToLinear(pal[1]));
+    const cpv = col.preview;
+    let inBlock = 0, hidden = 0;
+    for (let py = 0; py < cpv.h; py++) {
+      for (let px = 0; px < cpv.w; px++) {
+        const i = py * cpv.w + px, p = 4 * i;
+        if (cpv.result[p] !== cf[0] || cpv.result[p + 1] !== cf[1] || cpv.result[p + 2] !== cf[2]) continue;
+        const xmm = px / cpv.pxPerMm, ymm = py / cpv.pxPerMm;
+        if (xmm > 8.5 && xmm < 51.5 && ymm > 10.5 && ymm < 29.5) inBlock++;
+        else if (ymm < 9 || ymm > 31) hidden++;
+      }
+    }
+    check('color: the red layers are outlined in faded red inside the red region, never where the top sheet hides them',
+      col.levels.length === 2 && inBlock > 0 && hidden === 0, `${inBlock} outline pixels in the red block, ${hidden} under the top sheet · ${col.note}`);
   }
 }

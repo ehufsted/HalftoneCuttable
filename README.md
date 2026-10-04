@@ -55,6 +55,15 @@ Seven patterns:
   filled, and metal thinner than the min web is thickened rather than lost. In
   color, each sheet is cut by palette region. *Halftone inside shapes* fills each
   shape with round holes sized by its tone, instead of cutting it out whole.
+  *Brightness layers per color* adds that many extra sheets for each color,
+  stacked directly on that color's own sheet and cut along brightness contours,
+  so the brighter parts of each color's region stand higher, like a topographic
+  map. The levels are spaced evenly over the brightness range found in that
+  color's region, either *even as seen* (encoded) or *even in linear light*. In
+  B&W only the metal sheet gets them. They are held together by bridges, or cut
+  free to glue down, the same as the stencil's own sheets. Seen straight on, a
+  brightness layer is the same color as the sheet under it, so the Result view
+  outlines each one in a faded version of its color.
 - **Screen:** the image compared against a repeating pattern: straight or wavy lines
   (engraving), concentric rings, a spiral, flow lines, or a Turing labyrinth (spots
   in the shadows, a maze in the mids, metal lace in the lights). The Turing pattern's
@@ -133,6 +142,7 @@ then open:
 | Min hole | Smallest finished hole worth cutting. Cells that want less than this are dithered between no hole and this size. It is raised to 1.5× the kerf if it is below that. |
 | Kerf | Beam width. The exported paths are **already offset** by it, so turn kerf compensation off in your laser software. |
 | Registration | Color mode only. Each deeper hole is this much smaller on every side than the one above it, so small misalignment when stacking doesn't show. |
+| Alignment holes | Four corner holes, the same on every sheet, for pins that hold the stack in register. The diameter is the finished hole's: size it to the pin. Each keeps at least the min web to the edge (moved in if need be) and to the pattern (pattern holes closer than that are left out). |
 
 ## Export
 
@@ -142,7 +152,6 @@ software.
 
 - **Cut order:** holes are blue (DXF layer `HOLES`) and the outline red (layer
   `OUTLINE`). Set the holes to cut before the outline, so the piece stays in the
-| Alignment holes | Four corner holes, the same on every sheet, for pins that hold the stack in register. The diameter is the finished hole's: size it to the pin. Each keeps at least the min web to the edge (moved in if need be) and to the pattern (pattern holes closer than that are left out). |
   sheet until its holes are done. Within the holes, innermost contours come first.
 - **DXF details:** DXF is AutoCAD R12, the version laser and CAM software imports
   most reliably. Circles are true `CIRCLE`s, and rounded corners are exact arcs. R12
@@ -151,6 +160,10 @@ software.
 - **File names:** DXF names end in the sheet's color, e.g. `rhino-1-top-eae8e7.dxf`.
   SVG names don't, e.g. `rhino-1-top.svg`.
 - **Solid base:** the base sheet's file is its outline alone.
+- **Brightness layers** (Stencil): one file per layer, named after the sheet it
+  sits on plus its level, 1 being the lowest, e.g. `rhino-2-sheet2-level1.svg`
+  (B&W: `rhino-level1.svg`). Exports and the Cut paths picker list every sheet
+  in stack order, top first.
 
 ## Layout
 

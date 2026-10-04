@@ -187,6 +187,7 @@ function updateGridNote(s, rgba) {
       : state.methodId === 'stencil' ? 'shapes are cut whole; metal thinner than the min web is thickened'
       : state.methodId === 'screen' ? 'slots are tied and bridged; metal thinner than the min web is thickened'
       : state.methodId === 'rectangles' ? 'straight cuts placed by the image, into flat blocks of the sheet colors'
+      : state.methodId === 'hexGrid' ? `hexagonal cells ${fmtMm(pitch)} mm across`
       : `cells about ${fmtMm(pitch)} mm where the image is flat, smaller where it is detailed`;
     $('gridNote').innerHTML = isFinite(H) ? `piece <b>${fmtMm(s.widthMm)} × ${fmtMm(H)} mm</b> · ${how}` : '';
     return;

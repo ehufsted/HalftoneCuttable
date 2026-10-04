@@ -137,10 +137,13 @@ function hexCellAt(x, y, marginX, marginY, dx, dy, R, cellInradius, cols, rows) 
  * The thinnest metal one cut layer leaves, in mm: between every pair of
  * neighboring holed cells, and from an edge cell to the outline. Diagonal (non-
  * adjacent) cells need no check, the same reasoning squareGrid's thinnestWeb
- * gives for its own grid. Infinity if no holes.
+ * gives for its own grid. Infinity if no holes. Toward a neighbor every hole
+ * reaches s/2 (its flat-to-flat width, or diameter); toward the left and right
+ * edges a flat-top hexagon reaches its corner, s/√3.
  */
-function hexThinnestWeb(sizes, cols, rows, pitch, cellXY, W, H) {
+function hexThinnestWeb(shape, sizes, cols, rows, pitch, cellXY, W, H) {
   const nbrDist = (pitch * SQRT3) / 2;
+  const across = shape === 'hex' ? 1 / SQRT3 : 0.5;
   let min = Infinity;
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -151,7 +154,7 @@ function hexThinnestWeb(sizes, cols, rows, pitch, cellXY, W, H) {
         if (sQ > 0) min = Math.min(min, nbrDist - (sC + sQ) / 2);
       }
       const [x, y] = cellXY(col, row);
-      min = Math.min(min, Math.min(x, y, W - x, H - y) - sC / 2);
+      min = Math.min(min, Math.min(x, W - x) - sC * across, Math.min(y, H - y) - sC / 2);
     }
   }
   return min;
@@ -186,7 +189,7 @@ export function run(ctx) {
     sizeOf: (f, cap) => bisectSize(fOf, f, cap),
     diffuse: (visit) => diffuseGraph(order, nbrs, D, target, visit, ctx.diffuse !== false),
   });
-  const note = sFloor > sMax ? 'no hole fits: the min hole (or 1.5× kerf) exceeds the cell' : kerfNote(sFloor, ctx.minHole);
+  const note = sFloor > sMax ? 'no hole fits: the min hole (or the kerf’s own floor) exceeds the cell' : kerfNote(sFloor, ctx.minHole);
   return { sizes, note, target };
 }
 
@@ -292,7 +295,7 @@ export function build(rgba, settings, params = {}) {
     }
     layers.push(holes);
   }
-  const webs = res.sizes.map((sz) => hexThinnestWeb(sz, cols, rows, pitch, cellXY, W, H));
+  const webs = res.sizes.map((sz) => hexThinnestWeb(sh, sz, cols, rows, pitch, cellXY, W, H));
 
   return {
     widthMm: W, heightMm: H, mode: ctx.mode, D, N, palette,

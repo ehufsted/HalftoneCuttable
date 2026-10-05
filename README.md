@@ -147,6 +147,30 @@ then open:
 - <http://localhost:8080/> for the app
 - <http://localhost:8080/verify.html> for the verification harness
 
+## Running the tests
+
+Every feature has checks in `tests/`, and the harness runs them all. To run it
+from the command line, with nothing to install, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File run-tests.ps1
+```
+
+It starts its own server (on port 8091, so it can run beside `serve.ps1`),
+loads the harness in headless Chrome or Edge, prints every check, and exits
+0 if all pass, 1 if any fails or a section stops with an error, and 2 if it
+cannot run at all. A full run takes about half a minute. To run some sections only,
+name them (the names are in `tests/index.js`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File run-tests.ps1 -Only core.relief,pipeline
+```
+
+If the browser is not in a usual place, pass `-Browser "C:\path\to\chrome.exe"`.
+Each check prints what it measured, so a run's output can be saved and compared
+with an earlier one to see exactly what a change moved. With Node or Deno
+installed, `node run-tests.mjs` runs the same checks.
+
 ## Settings that matter at the cutter
 
 | Setting | Meaning |
@@ -184,6 +208,7 @@ software.
 ```
 index.html      app shell
 verify.html     harness shell
+run-tests.ps1   headless runner, no installs (Chrome or Edge); see Running the tests
 run-tests.mjs   headless runner (node/deno), if a JS runtime is available
 serve.ps1       zero-install static server
 src/

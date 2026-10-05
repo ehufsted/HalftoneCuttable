@@ -12,6 +12,7 @@ import * as units from './core.units.js';
 import * as holes from './core.holes.js';
 import * as relief from './core.relief.js';
 import * as contour from './core.contour.js';
+import * as assembly from './core.assembly.js';
 import * as squareGrid from './method.squareGrid.js';
 import * as hexGrid from './method.hexGrid.js';
 import * as polygon from './core.polygon.js';
@@ -38,6 +39,7 @@ export const SECTIONS = [
   ['core.holes', holes],
   ['core.relief', relief],
   ['core.contour', contour],
+  ['core.assembly', assembly],
   ['core.polygon', polygon],
   ['core.voronoi', voronoi],
   ['method.squareGrid', squareGrid],

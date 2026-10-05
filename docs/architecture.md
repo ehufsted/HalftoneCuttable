@@ -550,6 +550,26 @@ drawn explicitly: an option on this filter, or a cutting method.
   nearer. The harness now measures the length exactly, at 45° and at other
   elevations, thicknesses and drops.
 
+## Assembly sheet
+
+- **A loose part is an island loop.** In a traced sheet, metal that the cut
+  leaves free is a loop running the opposite way to the cut round it (sign ·
+  area < 0, core/holes.js). A bridged part has no loop of its own, since its
+  outline joins the metal around it through the bridges. Patterns of separate
+  holes never make one. So `core/assembly.js` finds every part to glue from the
+  geometry alone, whichever option freed it.
+- **The plan is DOM-free and the page is self-contained.** `assemblyPlan`
+  (the stack via `core/stack.js`'s `namedStack`, which the export buttons also
+  use, parts numbered "sheet.part", the steps bottom up) and `assemblyHTML` are
+  tested in the harness. The app adds only the thumbnails, drawn from the
+  preview's per-sheet metal masks with the cut's edges outlined in gray: a pale
+  sheet over a pale one, or a brightness layer (metal wherever it is hidden),
+  was unreadable by fill color alone.
+- **A part's number goes where it fits.** It is placed at the sampled point
+  inside the part farthest from its edge, ties going to the middle. A
+  non-convex part's centroid can lie outside it, and along a bar of even width
+  every point ties, so the first sample found was a corner.
+
 ## Export
 
 `core/svg.js` and `core/dxf.js` write the same hole model: holes first,

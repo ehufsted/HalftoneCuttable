@@ -40,6 +40,13 @@ function colorTag(piece, i, withColor) {
   return withColor && piece.colors && piece.colors[i] ? `-${piece.colors[i].replace('#', '').toLowerCase()}` : '';
 }
 
+/** Each material sheet's display name, top first: "Top sheet", "Sheet 2"..., "Base (solid)"; B&W: "Sheet". */
+export function sheetNames(piece) {
+  if (piece.mode !== 'color') return ['Sheet'];
+  const n = piece.nCut + 1;
+  return Array.from({ length: n }, (_, i) => (i === 0 ? 'Top sheet' : i === n - 1 ? 'Base (solid)' : `Sheet ${i + 1}`));
+}
+
 function sheetStem(stem, i, piece) {
   if (piece.mode !== 'color') return stem;
   const n = piece.nCut + 1;

@@ -7,7 +7,9 @@
 //   levels of color 0, sheet 0, levels of color 1, sheet 1, ..., sheet n-1
 //
 // The pipeline rasterizes this for the Result view, and the app lists exports
-// and cut paths in this order.
+// and cut paths, and the assembly sheet its steps, in this order.
+
+import { sheetNames, sheetFileName, levelFileName } from './names.js';
 
 /**
  * @param {Array<Array>} layers  the pattern's holes per cut sheet, top first
@@ -19,6 +21,27 @@
  *          top first; `sheet` is the pattern sheet's index, `level` the
  *          brightness layer itself, `base` marks the solid base (no holes)
  */
+/**
+ * The stack as a person meets it, top first: each sheet's entry from
+ * physicalStack plus its display name and its export file name.
+ * @param {{piece, layers, levels?}} res  a pipeline result
+ * @param {string} stem  the file-name stem (from the image name)
+ * @returns {Array<{name:string, file:(ext:string)=>string, color, holes, sheet?, level?, base?}>}
+ *   file names carry the sheet's hex color for DXF, not for SVG
+ */
+export function namedStack(res, stem) {
+  const bw = res.piece.mode !== 'color';
+  const names = sheetNames(res.piece);
+  return physicalStack(res.layers, res.levels || [], bw).map((e) => ({
+    ...e,
+    // a layer is not solid, though the base it sits on is
+    name: e.level ? `${names[e.color].replace(' (solid)', '')} level ${e.level.level}` : names[e.color],
+    file: (ext) => (e.level
+      ? levelFileName(stem, e.color, e.level.level, res.piece, ext, ext === 'dxf')
+      : sheetFileName(stem, e.color, res.piece, ext, ext === 'dxf')),
+  }));
+}
+
 export function physicalStack(layers, levels = [], bw = false) {
   const nSheets = bw ? 1 : layers.length + 1;
   const out = [];

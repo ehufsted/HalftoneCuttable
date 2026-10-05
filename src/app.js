@@ -5,8 +5,9 @@
 import { METHODS, byId, defaultsFor, paramVisible } from './methods/index.js';
 import { layerSVG, downloadSVG, downloadFile, HOLE_STROKE, OUTLINE_STROKE } from './core/svg.js';
 import { layerDXF } from './core/dxf.js';
-import { sheetFileName, levelFileName } from './core/names.js';
-import { physicalStack } from './core/stack.js';
+import { sheetNames } from './core/names.js';
+import { namedStack } from './core/stack.js';
+import { assemblyPlan, assemblyHTML } from './core/assembly.js';
 import { FILTERS, filterById } from './core/style.js';
 import { holePathData } from './core/holes.js';
 import { reliefShade } from './core/render.js';
@@ -438,7 +439,7 @@ function buildPalette() {
   const n = nSheets();
   while (state.palette.length < n) state.palette.splice(state.palette.length - 1, 0, '#808080');
   if (state.palette.length > n) state.palette = [...state.palette.slice(0, n - 1), state.palette[state.palette.length - 1]];
-  const names = sheetNamesFor(n);
+  const names = sheetNames({ mode: 'color', nCut: n - 1 });
   const host = $('palette');
   host.innerHTML = '';
   state.palette.forEach((hex, i) => {
@@ -499,25 +500,7 @@ function buildLayerControls() {
  * its own color's sheet. {name, holes, file(ext)}, holes without the alignment
  * holes, which every exported sheet gets.
  */
-function exportSheets(res) {
-  const bw = res.piece.mode !== 'color';
-  const names = bw ? ['Sheet'] : sheetNamesFor(res.piece.nCut + 1);
-  // DXF names carry the sheet's hex color; SVG names do not
-  return physicalStack(res.layers, res.levels || [], bw).map(({ color, holes, level }) => (level
-    ? {
-      name: `${names[color]} level ${level.level}`, holes,
-      file: (ext) => levelFileName(state.imageName, color, level.level, res.piece, ext, ext === 'dxf'),
-    }
-    : {
-      name: names[color], holes,
-      file: (ext) => sheetFileName(state.imageName, color, res.piece, ext, ext === 'dxf'),
-    }));
-}
-
-function sheetNamesFor(n) {
-  return Array.from({ length: n }, (_, i) =>
-    i === 0 ? 'Top sheet' : i === n - 1 ? 'Base (solid)' : `Sheet ${i + 1}`);
-}
+const exportSheets = (res) => namedStack(res, state.imageName);
 
 function exportLayer(i, ext = 'svg') {
   const res = state.result;
@@ -541,6 +524,56 @@ async function exportAll(ext = 'svg') {
     // Browsers drop back-to-back downloads fired in the same tick.
     await new Promise((r) => setTimeout(r, 350));
   }
+}
+
+/**
+ * The assembly sheet (core/assembly.js), in a new tab to print: the stack, the
+ * steps, and a map per sheet over a thumbnail drawn here from the preview's
+ * per-sheet metal masks.
+ */
+function openAssembly() {
+  const res = state.result;
+  if (!res) return;
+  const bw = res.piece.mode !== 'color';
+  const plan = assemblyPlan(res, {
+    stem: state.imageName,
+    thickness: num('reliefThick'),
+    machine: { speed: num('speed'), pierce: num('pierce') },
+    backdrop: bw ? $('backdropColor').value : null,
+  });
+  const thumbs = plan.sheets.map((sh, s) => sheetThumb(res.preview, s, sh.color, s + 1 < plan.sheets.length ? plan.sheets[s + 1].color : null, !bw));
+  const html = assemblyHTML(plan, { title: state.imageName, widthMm: res.piece.widthMm, heightMm: res.piece.heightMm, thumbs });
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  if (!window.open(url, '_blank')) setStatus('allow pop-ups to open the assembly sheet', 'bad');
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
+}
+
+/**
+ * Sheet s of the stack as a PNG data URL: its metal in its color, and where it
+ * is cut, the sheet beneath faintly (in color the solid base is metal
+ * everywhere; in B&W the backdrop shows as white), with the cut's edges in
+ * gray -- a pale sheet over a pale sheet, or a brightness layer that is metal
+ * wherever it is hidden, reads by its edges alone. The masks cover the cut
+ * sheets only, so the base is drawn solid.
+ */
+function sheetThumb(pv, s, color, belowColor, baseBelow) {
+  const { w, h, solid } = pv, N = w * h;
+  const rgb = (c) => [1, 3, 5].map((i) => parseInt(String(c).slice(i, i + 2), 16) || 0);
+  const mine = rgb(color), faint = belowColor ? rgb(belowColor).map((v) => Math.round(255 - 0.3 * (255 - v))) : [255, 255, 255];
+  const EDGE = [120, 120, 120];
+  const metalAt = (i) => s >= solid.n || solid.data[s * N + i];
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d'), im = ctx.createImageData(w, h);
+  for (let i = 0; i < N; i++) {
+    const metal = metalAt(i), x = i % w;
+    const edge = (x + 1 < w && metalAt(i + 1) !== metal) || (i + w < N && metalAt(i + w) !== metal);
+    const under = s + 1 < solid.n ? solid.data[(s + 1) * N + i] : baseBelow && s + 1 === solid.n;
+    const c = edge ? EDGE : metal ? mine : under ? faint : [255, 255, 255];
+    im.data[4 * i] = c[0]; im.data[4 * i + 1] = c[1]; im.data[4 * i + 2] = c[2]; im.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  return canvas.toDataURL('image/png');
 }
 
 function exportPng() {
@@ -880,6 +913,7 @@ function wireIOControls() {
   $('exportAll').addEventListener('click', () => exportAll('svg'));
   $('exportAllDxf').addEventListener('click', () => exportAll('dxf'));
   $('exportPng').addEventListener('click', exportPng);
+  $('assembly').addEventListener('click', openAssembly);
 
   const drop = $('drop');
   drop.addEventListener('click', () => $('file').click());

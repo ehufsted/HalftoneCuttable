@@ -202,6 +202,13 @@ software.
   sits on plus its level, 1 being the lowest, e.g. `rhino-2-sheet2-level1.svg`
   (B&W: `rhino-level1.svg`). Exports and the Cut paths picker list every sheet
   in stack order, top first.
+- **Assembly sheet:** a printable page (it opens in a new tab; print it, or
+  save it as PDF) for putting the stack together. It has the steps, bottom up;
+  a table of every sheet with its color, kind, cut time and file names; and a
+  map of each sheet, in its color over a faint view of the sheet beneath. Every
+  loose part to glue (floating parts, and parts cut free because no bridge could
+  rest on the sheet below) is outlined and numbered on its map, "sheet.part",
+  where it goes. The stack's height uses the Relief view's sheet thickness.
 
 ## Layout
 

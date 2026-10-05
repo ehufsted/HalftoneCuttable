@@ -211,6 +211,7 @@ export function build(rgba, settings, params = {}, hooks = {}) {
         color: p.color, level: p.level, of: p.of, value: p.value, range: p.range, holes: traceSheet(lv[i].C), web: lv[i].web,
       }));
       notes.push(...levelNotes(levels, plan.flat, ldbg, bw, P.bridges));
+      ldbg.cuts = lv.map((r) => r.C);         // each layer's finished raster, as debug.cuts the sheets'
     }
   } else {
     ({ layers, webs, tgtPix, cellsLabel } = halftoneShapes());

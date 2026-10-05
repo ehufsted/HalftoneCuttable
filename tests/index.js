@@ -24,6 +24,7 @@ import * as stencil from './method.stencil.js';
 import * as stencilLevels from './method.stencilLevels.js';
 import * as screen from './method.screen.js';
 import * as structure from './structure.js';
+import * as trace from './trace.js';
 import * as pipeline from './pipeline.js';
 
 export const SECTIONS = [
@@ -49,6 +50,7 @@ export const SECTIONS = [
   ['method.stencilLevels', stencilLevels],
   ['method.screen', screen],
   ['structure', structure],
+  ['trace', trace],
   ['pipeline', pipeline],
 ];
 

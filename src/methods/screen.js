@@ -92,7 +92,7 @@ const tri = (phase) => Math.abs(2 * (phase - Math.floor(phase)) - 1);
 const frac = (v) => v - Math.floor(v);
 const GOLDEN = 0.6180339887498949;   // (sqrt(5) - 1) / 2, the golden ratio's conjugate
 
-export function build(rgba, settings, params = {}) {
+export function build(rgba, settings, params = {}, hooks = {}) {
   const P = { ...DEF, ...params };
   const { s, W, H, bw, palette, n, nCut, D, web, kerf, reg, hFloor } = prepareRaster(rgba, settings);
   const p = P.period;
@@ -248,6 +248,7 @@ export function build(rgba, settings, params = {}) {
   const layers = [], webs = [], cuts = [];
   let contours = 0;
   for (let j = 0; j < nCut; j++) {
+    if (hooks.progress) hooks.progress(`cutting sheet ${j + 1} of ${nCut}`);
     let C;
     if (P.screen !== 'turing') {
       C = cutSheet(Fs[j], j, debug);

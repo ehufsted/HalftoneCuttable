@@ -25,8 +25,10 @@ self.onmessage = (ev) => {
       return;
     }
     if (msg.type !== 'run') return;
-    self.postMessage({ type: 'progress', jobId: msg.jobId, stage: 'cutting' });
-    const out = runPipeline(msg.rgba, msg.settings, msg.methodId, msg.params);
+    // each stage as it starts, straight to the app's status line (it drops any
+    // from a superseded job)
+    const onProgress = (stage) => self.postMessage({ type: 'progress', jobId: msg.jobId, stage });
+    const out = runPipeline(msg.rgba, msg.settings, msg.methodId, msg.params, { onProgress });
     const p = out.preview;
     const transfer = [p.result.buffer, p.source.buffer, p.diff.buffer, p.height.buffer, p.solid.data.buffer,
       ...(p.backlit ? [p.backlit.buffer] : [])];

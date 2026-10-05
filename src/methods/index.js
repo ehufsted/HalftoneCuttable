@@ -1,7 +1,10 @@
 // The method registry. A method module exports
 //
 //   id, label, blurb, params,
-//   build(rgba, settings, params) -> the hole model:
+//   build(rgba, settings, params, hooks) -> the hole model, where hooks is
+//     {progress(stage)}, optional: a slow method can say what it is doing (the
+//     stencil and the screen report each sheet); the rest ignore it.
+//   The hole model:
 //     { widthMm, heightMm, mode, D, N, palette,
 //       target, achieved, source   N*D per cell, linear: aimed at / got / asked
 //       layers                     holes per cut sheet, top first (core/holes.js)

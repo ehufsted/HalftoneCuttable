@@ -47,6 +47,28 @@ export function run() {
       solid.layers[0].length === 0 && solid.stats.layers[0].holes === 4);
   }
 
+  // ---- progress: each stage as it starts, the stencil and the screen sheet by sheet
+  {
+    const stages = (methodId, settings, params, opts = {}) => {
+      const seen = [];
+      runPipeline(flatGray(120, 80, 60), { ...plain, web: 0.6, minHole: 0.6, kerf: 0.15, ...settings }, methodId, params,
+        { ...opts, onProgress: (s) => seen.push(s) });
+      return seen;
+    };
+    // a three-color stack: two cut sheets to report
+    const col ={ mode: 'color', palette: ['#202020', '#d02020', '#2040d0'] };
+    const sten = stages('stencil', col, {});
+    check('progress: the stencil reports styling, each sheet in turn, tracing, then the previews',
+      sten.join(' | ') === 'styling | cutting | cutting sheet 1 of 2 | cutting sheet 2 of 2 | tracing the cut paths | rendering previews',
+      sten.join(' | '));
+    const scr = stages('screen', col, {}, { preview: false });
+    check('progress: the screen reports each sheet; no previews asked for, none reported',
+      scr.join(' | ') === 'styling | cutting | cutting sheet 1 of 2 | cutting sheet 2 of 2', scr.join(' | '));
+    const grid = stages('squareGrid', {}, { pitch: 3 });
+    check('progress: a fast method reports only the pipeline’s own stages',
+      grid.join(' | ') === 'styling | cutting | rendering previews', grid.join(' | '));
+  }
+
   // ---- alignment holes keep the web: to the outline, and to the pattern
   // (dropped per hole, or kept metal on the stencil's raster)
   {

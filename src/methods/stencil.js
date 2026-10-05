@@ -84,7 +84,7 @@ const DEF = Object.fromEntries(params.map((p) => [p.key, p.def]));
 const WORK_PIXELS = 2.5e6;
 const WINDOW = 3;           // mm, scoring window
 
-export function build(rgba, settings, params = {}) {
+export function build(rgba, settings, params = {}, hooks = {}) {
   const P = { ...DEF, ...params };
   const { s, W, H, bw, palette, n, nCut, D, web, kerf, reg, hFloor } = prepareRaster(rgba, settings);
 
@@ -174,17 +174,21 @@ export function build(rgba, settings, params = {}) {
       return { C, web: freed ? web : measureWeb(C) };
     };
     const main = new Array(nCut), lv = plan ? new Array(plan.sheets.length) : [];
-    let below = bw ? null : new Uint8Array(NP).fill(1);
+    const total = nCut + lv.length;
+    let below = bw ? null : new Uint8Array(NP).fill(1), done = 0;
+    const report = () => { if (hooks.progress) hooks.progress(`cutting sheet ${++done} of ${total}`); };
     for (let l = bw ? 0 : nCut; l >= 0; l--) {
-      if (l < nCut) { main[l] = finish(cuts[l], debug, below); below = invert(main[l].C); }
+      if (l < nCut) { report(); main[l] = finish(cuts[l], debug, below); below = invert(main[l].C); }
       if (!plan) continue;
       // this color's layers, lowest level first (the plan is top level first)
       for (let i = plan.sheets.length - 1; i >= 0; i--) {
         if (plan.sheets[i].color !== l) continue;
+        report();
         lv[i] = finish(plan.sheets[i].C, ldbg, below);
         below = invert(lv[i].C);
       }
     }
+    if (hooks.progress) hooks.progress('tracing the cut paths');
     layers = []; webs = [];
     let contours = 0;
     for (let j = 0; j < nCut; j++) {

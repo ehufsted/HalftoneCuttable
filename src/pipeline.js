@@ -27,16 +27,21 @@ import { applyStyle } from './core/style.js';
  *                            colors), speed (mm/s), pierce (s)
  * @param {string} methodId
  * @param {object} params     the method's own
- * @param {{preview?:boolean, maxDim?:number}} opts  preview:false skips the rasters
+ * @param {{preview?:boolean, maxDim?:number, onProgress?:(stage:string)=>void}} opts
+ *   preview:false skips the rasters; onProgress hears each stage as it starts
+ *   ("styling", the method's own, "rendering previews")
  */
 export function runPipeline(rgba, settings, methodId, params, opts = {}) {
   const s = { ...DEFAULTS, ...settings };
+  const progress = opts.onProgress || (() => {});
   // Tone (gamma, brightness, saturation) first, then Style: both restyle the
   // image before the method (and the Source view, and the reach score) see it,
   // so a person can see exactly what a slider or a filter did to the image.
+  progress('styling');
   const toned = applyTone(rgba, s.gamma, s.brightness, s.saturation);
   const styled = applyStyle(toned, s.style, s.widthMm);
-  const b = byId(methodId).build(styled, s, params);
+  progress('cutting');
+  const b = byId(methodId).build(styled, s, params, { progress });
   const { N, D, target, achieved, source } = b;
 
   let fid = 0, reach = 0;
@@ -102,6 +107,7 @@ export function runPipeline(rgba, settings, methodId, params, opts = {}) {
     },
   };
   if (opts.preview === false) return out;
+  progress('rendering previews');
 
   // The Result/backlit composites are physical views -- "as the stacked sheets
   // look" -- and an alignment hole really is cut through every sheet, so it

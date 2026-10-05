@@ -15,8 +15,9 @@ core/      units, shapes, color, separate, diffuse, render, cutpaths, svg, struc
            style (the style-filter registry and chain), kuwahara, lowpoly,
            stack (the physical sheet order with the Stencil's brightness layers),
            delaunay (ported verbatim from HalftoneWebPAL-1)
-methods/   one module per pattern, plus two engines patterns share (cellWeb: the
-           cell webs; gridTone: the fixed grids' tone); imports core/ only
+methods/   one module per pattern, plus what patterns share (cellWeb: the
+           cell webs; gridTone: the fixed grids' tone; brightnessLayers: the
+           stencil's layers); imports core/ only
 pipeline.js  the whole chain; imports methods/ and core/
 worker.js  wraps pipeline.js
 app.js     UI; the only DOM user (plus svg.downloadSVG)
